@@ -1,0 +1,9 @@
+node_modules
+.next
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+tests/e2e/output
+__pycache__/
+*.pyc
