@@ -37,7 +37,7 @@ export function checkoutBlockers(s: Settings, qr: QrInfo): string[] {
   if (!qr.configured) b.push("Payment QR not uploaded");
   if (!s.payment.instructionsEn.trim() || !s.payment.instructionsMs.trim()) b.push("Payment instructions missing");
   if (!s.contact.whatsapp) b.push("Contact WhatsApp number missing");
-  if (!(s.pricing.normalPrice > 0)) b.push("Price not set");
+  if (!s.packages.some((p) => p.enabled && p.normalPrice > 0)) b.push("No package enabled");
   if (s.upload.formats.length === 0) b.push("No upload formats enabled");
   return b;
 }

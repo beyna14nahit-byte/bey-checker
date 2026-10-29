@@ -1,10 +1,13 @@
-import type { Settings } from "./config";
+import type { Package, PackageId, Settings } from "./config";
 
 // Pricing is always computed on the server from the saved settings and the server clock.
 // The promotion applies from startsAt (inclusive) until endsAt (exclusive): at the exact end
-// instant the normal price applies, with no cron job or manual edit needed.
+// instant the normal prices apply, with no cron job or manual edit needed.
 
 export type Quote = {
+  packageId: PackageId;
+  nameEn: string;
+  nameMs: string;
   currency: "MYR";
   unit: "document";
   normalPrice: number;
@@ -17,29 +20,62 @@ export type Quote = {
 
 const cents = (n: number) => Math.round(n * 100);
 
-export function promotionIsValid(p: Settings["promotion"], normalPrice: number): boolean {
+/** The promotion window itself is valid (enabled, both dates set, end after start). */
+export function promotionWindowValid(p: Settings["promotion"]): boolean {
   const start = Date.parse(p.startsAt);
   const end = Date.parse(p.endsAt);
-  return p.enabled && !Number.isNaN(start) && !Number.isNaN(end) && end > start && p.promoPrice > 0 && cents(p.promoPrice) < cents(normalPrice);
+  return p.enabled && !Number.isNaN(start) && !Number.isNaN(end) && end > start;
 }
 
-export function getQuote(s: Settings, now: Date = new Date()): Quote {
-  const normal = s.pricing.normalPrice;
+/** A package has a real discount to apply during the promotion. */
+export function packageHasPromo(pkg: Package): boolean {
+  return pkg.promoPrice > 0 && cents(pkg.promoPrice) < cents(pkg.normalPrice);
+}
+
+export function enabledPackages(s: Settings): Package[] {
+  return s.packages.filter((p) => p.enabled && p.normalPrice > 0);
+}
+
+export function quoteFor(s: Settings, pkg: Package, now: Date = new Date()): Quote {
+  const base: Quote = {
+    packageId: pkg.id,
+    nameEn: pkg.nameEn,
+    nameMs: pkg.nameMs,
+    currency: "MYR",
+    unit: "document",
+    normalPrice: pkg.normalPrice,
+    finalPrice: pkg.normalPrice,
+    discount: 0,
+    promo: null,
+    changesAt: null,
+  };
   const p = s.promotion;
-  const base: Quote = { currency: "MYR", unit: "document", normalPrice: normal, finalPrice: normal, discount: 0, promo: null, changesAt: null };
-  if (!promotionIsValid(p, normal)) return base;
+  if (!promotionWindowValid(p) || !packageHasPromo(pkg)) return base;
   const t = now.getTime();
-  const start = Date.parse(p.startsAt);
-  const end = Date.parse(p.endsAt);
-  if (t < start) return { ...base, changesAt: p.startsAt };
-  if (t >= end) return base;
+  if (t < Date.parse(p.startsAt)) return { ...base, changesAt: p.startsAt };
+  if (t >= Date.parse(p.endsAt)) return base;
   return {
     ...base,
-    finalPrice: p.promoPrice,
-    discount: (cents(normal) - cents(p.promoPrice)) / 100,
+    finalPrice: pkg.promoPrice,
+    discount: (cents(pkg.normalPrice) - cents(pkg.promoPrice)) / 100,
     promo: { labelEn: p.labelEn, labelMs: p.labelMs, endsAt: p.endsAt },
     changesAt: p.endsAt,
   };
+}
+
+/** Quotes for every package customers can order, in display order. */
+export function getQuotes(s: Settings, now: Date = new Date()): Quote[] {
+  return enabledPackages(s).map((pkg) => quoteFor(s, pkg, now));
+}
+
+/** The earliest moment any displayed price changes. */
+export function nextPriceChange(quotes: Quote[]): string | null {
+  const times = quotes.map((q) => q.changesAt).filter((x): x is string => !!x);
+  return times.length ? times.sort((a, b) => Date.parse(a) - Date.parse(b))[0] : null;
+}
+
+export function packageName(q: { nameEn: string; nameMs: string }, lang: "en" | "ms"): string {
+  return lang === "ms" ? q.nameMs || q.nameEn : q.nameEn;
 }
 
 export function rm(n: number | string | null | undefined): string {

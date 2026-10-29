@@ -12,7 +12,7 @@ export default async function TermsPage() {
     [
       t("The service"),
       [
-        t("Bey Checker is a manual service. After your payment is verified, a person runs your document through an AI detection tool and sends you the report {delivery}.", { delivery }),
+        t("Bey Checker is a manual service. After your payment is verified, a person runs your document through the checking tool for the package you chose (AI detection, similarity, or both) and sends you the report {delivery}.", { delivery }),
         t("Uploading a document does not check it automatically, and this website does not generate detection results by itself."),
         t("One order covers one document. The amount shown before you confirm is the amount you pay."),
       ],
@@ -21,6 +21,7 @@ export default async function TermsPage() {
       t("About the results"),
       [
         t("AI detection results are indicators only. They cannot prove whether a person or an AI wrote a document."),
+        t("A similarity report shows text that matches other sources. A match is not proof of plagiarism by itself; quotes and references can also match."),
         t("We do not guarantee any particular AI percentage, grade or academic outcome."),
         t("You remain responsible for how you use the report and for following your institution's rules."),
       ],

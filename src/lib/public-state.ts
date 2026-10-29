@@ -1,10 +1,12 @@
 import { getQrInfo, getSettings, checkoutBlockers } from "./settings";
-import { getQuote, type Quote } from "./pricing";
+import { getQuotes, nextPriceChange, type Quote } from "./pricing";
 import { documentLimitMb } from "./files";
 import type { Settings } from "./config";
 
 export type PublicState = {
-  quote: Quote;
+  quotes: Quote[];
+  /** Earliest moment any price changes (promotion start or end). */
+  changesAt: string | null;
   serverTime: string;
   checkoutOpen: boolean;
   deliveryMethod: Settings["delivery"]["method"];
@@ -21,9 +23,11 @@ export type PublicState = {
 /** Everything the public pages need, computed fresh on the server for each request. */
 export async function getPublicState(now: Date = new Date()): Promise<PublicState & { settings: Settings }> {
   const [settings, qr] = await Promise.all([getSettings(), getQrInfo()]);
+  const quotes = getQuotes(settings, now);
   return {
     settings,
-    quote: getQuote(settings, now),
+    quotes,
+    changesAt: nextPriceChange(quotes),
     serverTime: now.toISOString(),
     checkoutOpen: checkoutBlockers(settings, qr).length === 0,
     deliveryMethod: settings.delivery.method,

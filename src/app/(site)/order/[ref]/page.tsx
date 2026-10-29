@@ -42,7 +42,23 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const amount = Number(order.amount_due);
   const delivery = order.delivery_method === "email" ? t("by email to {email}", { email: order.email ?? "" }) : t("on WhatsApp to +{number}", { number: order.whatsapp });
   const instructions = lang === "ms" ? settings.payment.instructionsMs : settings.payment.instructionsEn;
-  const message = t("Hi Bey Checker, I have a question about my order {ref}.", { ref: order.reference });
+  const pkgName = order.lang === "ms" ? order.package_name_ms : order.package_name_en;
+  const statusLine = order.status === "awaiting_payment" ? "Awaiting payment" : order.status === "payment_review" ? "Receipt uploaded, payment under review" : STATUS_LABELS[order.status];
+  // Sent to the owner, so always in the same English format. Contains order details only:
+  // the document itself never goes through WhatsApp (the owner downloads it from the dashboard).
+  const message = [
+    "Hi Bey Checker, here are my order details:",
+    "",
+    `Order reference: ${order.reference}`,
+    `Package: ${order.package_name_en}`,
+    `Amount: ${rm(amount)}`,
+    `Name: ${order.customer_name}`,
+    `WhatsApp: +${order.whatsapp}`,
+    ...(order.email ? [`Email: ${order.email}`] : []),
+    `Document: ${doc?.filename ?? "-"}`,
+    `Status: ${statusLine}`,
+    ...(order.note ? [`Note: ${order.note.slice(0, 300)}`] : []),
+  ].join("\n");
   const stepIndex = TRACK.indexOf(order.status);
 
   return (
@@ -78,7 +94,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <h2 className="font-semibold">{t("Order details")}</h2>
         <dl className="mt-3 divide-y divide-line text-sm">
           {[
-            [t("Service"), t("AI detection report (manual check)")],
+            [t("Package"), pkgName],
             [t("Document"), doc?.filename ?? t("Removed under our retention policy")],
             [t("Pricing unit"), t("Per document")],
             [t("Normal price"), rm(order.normal_price)],
@@ -155,9 +171,18 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         </details>
       )}
 
+      {contact && (order.status === "awaiting_payment" || order.status === "payment_review") && (
+        <p className="text-sm text-ink-soft">{t("After paying, tap the button below to send us your order details on WhatsApp. Your document is already with us; you do not need to send it again.")}</p>
+      )}
       {contact && (
-        <a href={waLink(contact, message)} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary")} data-testid="order-whatsapp">
-          <MessageCircle className="h-4 w-4" aria-hidden="true" /> {t("Contact us on WhatsApp")}
+        <a
+          href={waLink(contact, message)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={order.status === "awaiting_payment" || order.status === "payment_review" ? `${buttonClass("primary")} w-full sm:w-auto` : buttonClass("secondary")}
+          data-testid="order-whatsapp"
+        >
+          <MessageCircle className="h-4 w-4" aria-hidden="true" /> {t("Send order details on WhatsApp")}
         </a>
       )}
     </Container>

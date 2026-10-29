@@ -43,6 +43,7 @@ async function docx(words: number): Promise<Buffer> {
   zip.file("word/document.xml", `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${"essay ".repeat(words)}</w:t></w:r></w:p></w:body></w:document>`);
   return zip.generateAsync({ type: "nodebuffer" });
 }
+const SALE_ACTIVE = Date.now() < Date.parse("2026-11-01T00:00:00+08:00");
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 
@@ -54,6 +55,7 @@ async function apiOrder(data: Record<string, unknown>, file: { name: string; buf
   return { status: res.status, body: (await res.json()) as any };
 }
 const baseOrder = (over: Record<string, unknown> = {}) => ({
+  packageId: "ai",
   customerName: "Aina Test",
   whatsapp: "+60 12-345 6789",
   note: "",
@@ -64,7 +66,8 @@ const baseOrder = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-async function fillOrderForm(p: Page, fileName = "essay.docx", buf?: Buffer) {
+async function fillOrderForm(p: Page, fileName = "essay.docx", buf?: Buffer, pkg = "ai") {
+  await p.click(`label:has([data-testid=package-${pkg}])`);
   await p.fill("#customerName", "Nur Ujian");
   await p.fill("#whatsapp", "+60 12-345 6789");
   await p.setInputFiles("[data-testid=document-input]", { name: fileName, mimeType: "application/octet-stream", buffer: buf ?? (await docx(300)) });
@@ -101,23 +104,31 @@ async function main() {
   const orders: Record<string, { ref: string; url: string }> = {};
 
   console.log("\nSetup and safe defaults");
-  await test("Health check: database ready, no admin, checkout closed, no secrets in output", async () => {
+  await test("Health check: database ready, no admin yet, checkout open, no secrets in output", async () => {
     const res = await fetch(`${BASE}/api/health`);
     const text = await res.text();
     const h = JSON.parse(text);
-    expect(h.ok && h.migrationsApplied >= 1 && h.adminAccountExists === false && h.checkoutOpen === false, text);
+    expect(h.ok && h.migrationsApplied >= 3 && h.adminAccountExists === false && h.checkoutOpen === true, text);
     expect(!text.includes("postgres") && !text.includes(process.env.CRON_SECRET!) && !text.includes("localhost:5433"), "health leaks details");
   });
-  await test("Without a QR and contact number, checkout is disabled (page and API)", async () => {
-    await page.goto(`${BASE}/`);
-    expect(await page.isVisible("[data-testid=checkout-closed]"), "closed notice missing");
-    expect((await page.locator("[data-testid=order-form]").count()) === 0, "form shown");
-    const r = await apiOrder(baseOrder(), { name: "a.docx", buffer: await docx(10) });
-    expect(r.status === 503, `API accepted order: ${r.status}`);
+  await test("Owner's QR is installed byte-for-byte and the WhatsApp number is set", async () => {
+    const served = Buffer.from(await (await fetch(`${BASE}/api/payment-qr`)).arrayBuffer());
+    expect(served.equals(readFileSync("assets/payment-qr/boost-bank-duitnow-qr.webp")), "QR differs from the owner's file");
+    const [row] = await sql`select data->'contact'->>'whatsapp' as w from settings`;
+    expect(row.w === "60109882148", row.w);
   });
-  await test("Default price is RM9 with no promotion banner", async () => {
-    expect((await page.textContent("[data-testid=price-card]"))?.includes("RM9.00"), "price");
-    expect((await page.locator("[data-testid=promo-banner]").count()) === 0, "banner shown");
+  await test("Three packages with the End of October Sale prices (normal prices after the sale)", async () => {
+    const q = await (await fetch(`${BASE}/api/quote`)).json();
+    const got = Object.fromEntries(q.quotes.map((x: any) => [x.packageId, x.finalPrice]));
+    const want = SALE_ACTIVE ? { ai: 7, similarity: 4, combo: 9 } : { ai: 9, similarity: 5, combo: 11 };
+    expect(JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
+    await page.goto(`${BASE}/`);
+    for (const [id, price] of Object.entries(want)) expect((await page.textContent(`[data-testid=price-card-price-${id}]`)) === `RM${price}.00`, `${id} card`);
+    if (SALE_ACTIVE) {
+      expect((await page.textContent("[data-testid=price-card-normal-combo]")) === "RM11.00", "combo normal not crossed out");
+      expect((await page.textContent("[data-testid=promo-banner]"))?.includes("End of October Sale"), "banner");
+      expect((await page.textContent("[data-testid=promo-banner]"))?.includes("1 Nov 2026, 12:00 am"), "banner end time");
+    }
   });
   await test("First admin is created through /admin/setup; wrong token refused; setup then locked", async () => {
     await page.goto(`${BASE}/admin/setup`);
@@ -147,10 +158,17 @@ async function main() {
   });
 
   const admin = await adminLogin(ctx);
-  await test("Owner configures contact and uploads the QR in settings; checkout opens", async () => {
+  await test("Removing the QR closes checkout (page and API); uploading it again reopens it", async () => {
     await admin.goto(`${BASE}/admin/settings`);
     await admin.fill("[name=whatsapp]", "60123456789");
     await act(admin, "button:has-text('Save settings')", "Settings saved.");
+    await Promise.all([admin.waitForURL(/ok=Payment/), admin.click("text=Remove QR")]);
+    await page.goto(`${BASE}/`);
+    expect(await page.isVisible("[data-testid=checkout-closed]"), "closed notice missing");
+    expect((await page.locator("[data-testid=order-form]").count()) === 0, "form shown");
+    const r = await apiOrder(baseOrder(), { name: "a.docx", buffer: await docx(10) });
+    expect(r.status === 503, `API accepted order: ${r.status}`);
+    await admin.goto(`${BASE}/admin/settings`);
     await admin.setInputFiles("[name=qr]", process.env.QR_FIXTURE!);
     await Promise.all([admin.waitForURL(/ok=Payment/), admin.click("button:has-text('Upload QR')")]);
     expect(await admin.isVisible("[data-testid=admin-qr]"), "QR preview");
@@ -160,6 +178,8 @@ async function main() {
   await test("Enabling a promotion without dates is refused", async () => {
     await admin.goto(`${BASE}/admin/settings`);
     await admin.check("[name=promoEnabled]");
+    await admin.fill("[name=promoStart]", "");
+    await admin.fill("[name=promoEnd]", "");
     await act(admin, "button:has-text('Save settings')", "Set both promotion start and end");
   });
 
@@ -167,7 +187,8 @@ async function main() {
   await test("Promotion scheduled in the future: normal price until it starts", async () => {
     await patchSettings((s) => Object.assign(s.promotion, { enabled: true, promoPrice: 7, startsAt: iso(3600e3), endsAt: iso(7200e3) }));
     const q = await (await fetch(`${BASE}/api/quote`)).json();
-    expect(q.quote.finalPrice === 9 && q.quote.changesAt, JSON.stringify(q.quote));
+    const ai = q.quotes.find((x: any) => x.packageId === "ai");
+    expect(ai.finalPrice === 9 && q.changesAt, JSON.stringify(q));
   });
   await test("Active promotion: RM7 with RM9 crossed out, banner and deadline", async () => {
     await patchSettings((s) => Object.assign(s.promotion, { startsAt: iso(-3600e3), endsAt: iso(3600e3), labelEn: "Launch promotion", labelMs: "Promosi pelancaran" }));
@@ -177,13 +198,15 @@ async function main() {
     expect(await page.isVisible("[data-testid=promo-banner]"), "banner");
     expect((await page.textContent("[data-testid=promo-banner]"))?.includes("until"), "deadline");
   });
-  await test("Price card: promo badge only while active, no billing switch, Check AI goes to the order form", async () => {
+  await test("Price cards: Best value only on the combo, no billing switch, Choose preselects the package", async () => {
     const card = (await page.textContent("[data-testid=price-card]")) ?? "";
-    expect(card.includes("Launch promotion"), "promo badge missing during promotion");
+    expect(card.includes("Launch promotion prices until"), "promotion note missing");
+    expect((await page.locator("[data-testid=price-card-card-combo] >> text=Best value").count()) === 1, "combo badge");
+    expect((await page.locator("[data-testid=price-card] >> text=Best value").count()) === 1, "badge on other cards");
     expect((await page.locator("[role=switch]").count()) === 0 && !/annual|monthly|billed/i.test(card), "subscription UI present");
-    await page.click("[data-testid=price-card] >> text=Check AI");
-    await page.waitForFunction(() => location.hash === "#order");
-    expect(await page.isVisible("[data-testid=order-form]"), "order form not shown");
+    await page.click("[data-testid=price-card-card-similarity] >> text=Choose");
+    await page.waitForURL(/package=similarity#order/);
+    expect(await page.isChecked("[data-testid=package-similarity]"), "package not preselected");
   });
 
   await test("Order review shows service, unit, normal price, discount and final amount", async () => {
@@ -192,7 +215,7 @@ async function main() {
     await page.click("[data-testid=review-order]");
     await page.waitForSelector("[data-testid=order-review]");
     const txt = await page.textContent("[data-testid=order-review]");
-    for (const s of ["AI detection report (manual check)", "essay.docx", "Per document", "WhatsApp: +60 12-345 6789"]) expect(txt?.includes(s), `missing ${s}`);
+    for (const s of ["AI Check", "essay.docx", "Per document", "WhatsApp: +60 12-345 6789"]) expect(txt?.includes(s), `missing ${s}`);
     expect((await page.textContent("[data-testid=summary-normal]")) === "RM9.00", "normal");
     expect((await page.textContent("[data-testid=summary-discount]")) === "-RM2.00", "discount");
     expect((await page.textContent("[data-testid=summary-total]")) === "RM7.00", "total");
@@ -212,7 +235,7 @@ async function main() {
   await test("The browser amount is never trusted (expectedAmount mismatch refused, nothing saved)", async () => {
     const before = (await sql`select count(*)::int n from orders`)[0].n;
     const r = await apiOrder(baseOrder({ expectedAmount: 1 }), { name: "a.docx", buffer: await docx(10) });
-    expect(r.status === 409 && r.body.code === "price_changed" && r.body.quote.finalPrice === 9, JSON.stringify(r.body));
+    expect(r.status === 409 && r.body.code === "price_changed" && r.body.quote.finalPrice === 9 && r.body.quote.packageId === "ai", JSON.stringify(r.body));
     expect((await sql`select count(*)::int n from orders`)[0].n === before, "order saved");
   });
   await test("An order keeps its recorded promo amount after the promotion ends", async () => {
@@ -261,6 +284,33 @@ async function main() {
     orders.ui = { ref: (await page.textContent("[data-testid=order-ref]"))!.trim(), url: page.url().replace(BASE, "") };
     expect((await sql`select count(*)::int n from orders`)[0].n === before + 1, "duplicate created");
   });
+  await test("Plagiarism and combo orders are charged and stored per package", async () => {
+    const sim = await apiOrder(baseOrder({ packageId: "similarity", expectedAmount: 5 }), { name: "s.pdf", buffer: PDF });
+    const combo = await apiOrder(baseOrder({ packageId: "combo", expectedAmount: 11 }), { name: "c.pdf", buffer: PDF });
+    expect(sim.status === 200 && sim.body.amountDue === 5 && combo.status === 200 && combo.body.amountDue === 11, JSON.stringify([sim.body, combo.body]));
+    const rows = await sql`select package_id, package_name_en, amount_due from orders where reference in (${sim.body.reference}, ${combo.body.reference}) order by amount_due`;
+    expect(rows[0].package_id === "similarity" && rows[1].package_id === "combo" && rows[1].package_name_en === "AI + Plagiarism Combo", JSON.stringify(rows));
+    const wrongPrice = await apiOrder(baseOrder({ packageId: "combo", expectedAmount: 9 }), { name: "c.pdf", buffer: PDF });
+    expect(wrongPrice.status === 409 && wrongPrice.body.quote.finalPrice === 11, "combo charged at the wrong price");
+    const bad = await apiOrder(baseOrder({ packageId: "humanize" }), { name: "c.pdf", buffer: PDF });
+    expect(bad.status === 422 && bad.body.errors.packageId, "unknown package accepted");
+    const none = await apiOrder(baseOrder({ packageId: "" }), { name: "c.pdf", buffer: PDF });
+    expect(none.status === 422 && none.body.errors.packageId, "missing package accepted");
+  });
+  await test("A package hidden by the owner cannot be ordered", async () => {
+    await patchSettings((s) => (s.packages.find((p: any) => p.id === "combo").enabled = false));
+    await page.goto(`${BASE}/`);
+    expect((await page.locator("[data-testid=price-card-card-combo]").count()) === 0, "hidden card shown");
+    const r = await apiOrder(baseOrder({ packageId: "combo", expectedAmount: 11 }), { name: "c.pdf", buffer: PDF });
+    expect(r.status === 422, "hidden package accepted");
+    await patchSettings((s) => (s.packages.find((p: any) => p.id === "combo").enabled = true));
+  });
+  await test("The review step requires choosing a package", async () => {
+    await page.goto(`${BASE}/#order`);
+    await page.fill("#customerName", "Nur Ujian");
+    await page.click("[data-testid=review-order]");
+    expect(await page.isVisible("text=Please choose a package."), "no package error");
+  });
   await test("Server rejects wrong types, fake files, disabled formats, oversize files and missing consent", async () => {
     const exe = await apiOrder(baseOrder(), { name: "a.exe", buffer: Buffer.from("MZ") });
     expect(exe.status === 422 && /not accepted/.test(exe.body.message), JSON.stringify(exe.body));
@@ -292,7 +342,11 @@ async function main() {
     expect(loaded > 0, "QR not loaded");
     expect((await page.textContent("[data-testid=payment-section]"))?.includes("Scan the QR code"), "instructions");
     const wa = decodeURIComponent((await page.getAttribute("[data-testid=order-whatsapp]", "href"))!);
-    expect(wa.startsWith("https://wa.me/60123456789?text=") && wa.includes(orders.ui.ref) && !wa.includes("double.docx"), wa);
+    expect(wa.startsWith("https://wa.me/60123456789?text="), wa);
+    for (const part of [`Order reference: ${orders.ui.ref}`, "Package: AI Check", "Amount: RM9.00", "Name: Nur Ujian", "WhatsApp: +60123456789", "Document: double.docx", "Status: Awaiting payment"]) {
+      expect(wa.includes(part), `WhatsApp message missing "${part}"`);
+    }
+    expect(!wa.includes("essay essay"), "document content leaked into WhatsApp");
   });
   await test("Uploading a receipt sets 'Pending verification' and never marks the order paid", async () => {
     await page.setInputFiles("[data-testid=receipt-input]", { name: "receipt.png", mimeType: "image/png", buffer: PNG });
@@ -467,6 +521,44 @@ async function main() {
     await p.waitForTimeout(700);
     const shown = await p.$$eval(".reveal.is-visible", (els) => els.length);
     expect(shown > 0, "nothing revealed on scroll");
+    await c.close();
+  });
+
+  console.log("\nInteractive grid background");
+  const gridFrame = (p: Page) => p.$eval("[data-testid=kinetic-grid]", (c) => (c as HTMLCanvasElement).toDataURL());
+  await test("Grid background is drawn, decorative, idle when the mouse is still, and reacts to the mouse", async () => {
+    const c = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const p = await c.newPage();
+    await p.goto(`${BASE}/`);
+    const g = p.locator("[data-testid=kinetic-grid]");
+    expect((await g.getAttribute("aria-hidden")) === "true", "not decorative");
+    await p.waitForTimeout(400);
+    const a = await gridFrame(p);
+    await p.waitForTimeout(500);
+    expect(a === (await gridFrame(p)), "grid redraws while idle");
+    await p.mouse.move(640, 300, { steps: 8 });
+    await p.waitForTimeout(250);
+    expect(a !== (await gridFrame(p)), "grid does not react to the mouse");
+    await p.waitForTimeout(2500);
+    const settled = await gridFrame(p);
+    await p.waitForTimeout(400);
+    expect(settled === (await gridFrame(p)), "animation loop keeps running after the mouse stops");
+    await c.close();
+  });
+  await test("Grid stays still with reduced motion; header stays pinned while scrolling", async () => {
+    const c = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+    const p = await c.newPage();
+    await p.goto(`${BASE}/`);
+    await p.waitForTimeout(300);
+    const a = await gridFrame(p);
+    await p.mouse.move(600, 300, { steps: 8 });
+    await p.mouse.click(600, 300);
+    await p.waitForTimeout(300);
+    expect(a === (await gridFrame(p)), "grid moved despite reduced motion");
+    await p.evaluate(() => window.scrollTo(0, 1500));
+    await p.waitForTimeout(200);
+    const top = await p.$eval("header", (h) => h.getBoundingClientRect().top);
+    expect(Math.abs(top) < 1, `header not pinned (top ${top})`);
     await c.close();
   });
 

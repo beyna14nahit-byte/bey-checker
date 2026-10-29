@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ORDER_STATUSES, UPLOAD_FORMATS, type OrderStatus, type Settings, type UploadFormat } from "@/lib/config";
+import { ORDER_STATUSES, UPLOAD_FORMATS, type OrderStatus, type Package, type Settings, type UploadFormat } from "@/lib/config";
 import { getSettings, saveSettings } from "@/lib/settings";
 import { purgeExpiredFiles } from "@/lib/retention";
 import { normalisePhone, validEmail } from "@/lib/contact";
@@ -94,10 +94,18 @@ export async function saveSettingsAction(form: FormData) {
   const cur = await getSettings();
   const errors: string[] = [];
 
-  const normal = money(str(form, "normalPrice"));
-  if (normal === null) errors.push("Normal price must be a positive amount, e.g. 9 or 9.00.");
-  const promoPrice = money(str(form, "promoPrice"));
-  if (promoPrice === null) errors.push("Promotional price must be a positive amount.");
+  const packages: Package[] = cur.packages.map((pk) => {
+    const normal = money(str(form, `pkg_${pk.id}_normal`));
+    const promo = money(str(form, `pkg_${pk.id}_promo`));
+    const nameEn = str(form, `pkg_${pk.id}_nameEn`).slice(0, 60);
+    const nameMs = str(form, `pkg_${pk.id}_nameMs`).slice(0, 60);
+    if (normal === null) errors.push(`${pk.nameEn}: normal price must be a positive amount, e.g. 9 or 9.00.`);
+    if (promo === null) errors.push(`${pk.nameEn}: promotional price must be a positive amount.`);
+    else if (normal !== null && promo > normal) errors.push(`${pk.nameEn}: promotional price cannot be higher than the normal price.`);
+    if (!nameEn || !nameMs) errors.push(`${pk.nameEn}: names are required in both languages.`);
+    return { ...pk, enabled: form.get(`pkg_${pk.id}_enabled`) === "on", nameEn: nameEn || pk.nameEn, nameMs: nameMs || pk.nameMs, normalPrice: normal ?? pk.normalPrice, promoPrice: promo ?? pk.promoPrice };
+  });
+  if (!packages.some((p) => p.enabled)) errors.push("Offer at least one package.");
   const enabled = form.get("promoEnabled") === "on";
   const startsAt = str(form, "promoStart") ? myLocalToIso(str(form, "promoStart")) : "";
   const endsAt = str(form, "promoEnd") ? myLocalToIso(str(form, "promoEnd")) : "";
@@ -105,7 +113,6 @@ export async function saveSettingsAction(form: FormData) {
   if (enabled) {
     if (!startsAt || !endsAt) errors.push("Set both promotion start and end before enabling it.");
     else if (Date.parse(endsAt) <= Date.parse(startsAt)) errors.push("Promotion end must be after its start.");
-    if (normal !== null && promoPrice !== null && promoPrice >= normal) errors.push("Promotional price must be lower than the normal price.");
   }
 
   const whatsapp = str(form, "whatsapp") ? normalisePhone(str(form, "whatsapp")) : "";
@@ -134,8 +141,8 @@ export async function saveSettingsAction(form: FormData) {
   const next: Settings = {
     ...cur,
     contact: { whatsapp: whatsapp ?? "", email, telegramUrl: telegram },
-    pricing: { currency: "MYR", normalPrice: normal! },
-    promotion: { enabled, promoPrice: promoPrice!, labelEn: str(form, "promoLabelEn").slice(0, 60), labelMs: str(form, "promoLabelMs").slice(0, 60), startsAt: startsAt ?? "", endsAt: endsAt ?? "" },
+    packages,
+    promotion: { enabled, labelEn: str(form, "promoLabelEn").slice(0, 60), labelMs: str(form, "promoLabelMs").slice(0, 60), startsAt: startsAt ?? "", endsAt: endsAt ?? "" },
     payment: { provider: str(form, "provider").slice(0, 60) || "DuitNow QR", instructionsEn: instructionsEn.slice(0, 2000), instructionsMs: instructionsMs.slice(0, 2000), windowHours },
     delivery: { method: method as "whatsapp" | "email", turnaroundEn: str(form, "turnaroundEn").slice(0, 120), turnaroundMs: str(form, "turnaroundMs").slice(0, 120) },
     upload: { formats, maxMb },

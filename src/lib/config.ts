@@ -1,12 +1,24 @@
 // Default business settings, written to the database on first deploy only. The owner edits the
 // live copy in /admin/settings; every page reads it from there.
 
+export const PACKAGE_IDS = ["ai", "similarity", "combo"] as const;
+export type PackageId = (typeof PACKAGE_IDS)[number];
+
+export type Package = {
+  id: PackageId;
+  enabled: boolean;
+  nameEn: string;
+  nameMs: string;
+  normalPrice: number;
+  /** Charged while the promotion window is active. */
+  promoPrice: number;
+};
+
 export type Settings = {
   contact: { whatsapp: string; email: string; telegramUrl: string };
-  pricing: { currency: "MYR"; normalPrice: number };
+  packages: Package[];
   promotion: {
     enabled: boolean;
-    promoPrice: number;
     labelEn: string;
     labelMs: string;
     startsAt: string; // ISO with +08:00, or "" when not set
@@ -32,9 +44,20 @@ export const UPLOAD_FORMATS = ["pdf", "docx", "doc", "txt"] as const;
 export type UploadFormat = (typeof UPLOAD_FORMATS)[number];
 
 export const DEFAULT_SETTINGS: Settings = {
-  contact: { whatsapp: "", email: "", telegramUrl: "" },
-  pricing: { currency: "MYR", normalPrice: 9 },
-  promotion: { enabled: false, promoPrice: 7, labelEn: "Launch promotion", labelMs: "Promosi pelancaran", startsAt: "", endsAt: "" },
+  contact: { whatsapp: "60109882148", email: "", telegramUrl: "" },
+  packages: [
+    { id: "ai", enabled: true, nameEn: "AI Check", nameMs: "Semakan AI", normalPrice: 9, promoPrice: 7 },
+    { id: "similarity", enabled: true, nameEn: "Plagiarism / Similarity Check", nameMs: "Semakan Plagiarisme / Persamaan", normalPrice: 5, promoPrice: 4 },
+    { id: "combo", enabled: true, nameEn: "AI + Plagiarism Combo", nameMs: "Kombo AI + Plagiarisme", normalPrice: 11, promoPrice: 9 },
+  ],
+  // End of October 2026 sale: ends at midnight, so all of 31 October is included.
+  promotion: {
+    enabled: true,
+    labelEn: "End of October Sale",
+    labelMs: "Jualan Akhir Oktober",
+    startsAt: "2026-10-01T00:00:00+08:00",
+    endsAt: "2026-11-01T00:00:00+08:00",
+  },
   payment: {
     provider: "DuitNow QR",
     instructionsEn:

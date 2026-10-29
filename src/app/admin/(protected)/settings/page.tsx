@@ -1,5 +1,5 @@
 import { getQrInfo, getSettings } from "@/lib/settings";
-import { getQuote, rm } from "@/lib/pricing";
+import { getQuotes, rm } from "@/lib/pricing";
 import { UPLOAD_FORMATS } from "@/lib/config";
 import { isoToMyLocalInput, formatMy } from "@/lib/time";
 import { hostLimitMb } from "@/lib/files";
@@ -30,12 +30,13 @@ const check = "flex items-center gap-2 text-sm font-medium";
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; bad?: string }> }) {
   const sp = await searchParams;
   const [s, qr] = await Promise.all([getSettings(), getQrInfo()]);
-  const q = getQuote(s);
+  const quotes = getQuotes(s);
+  const promo = quotes.find((x) => x.promo)?.promo ?? null;
   const p = s.promotion;
   return (
     <>
       <h1 className="mb-1 text-2xl font-bold">Settings</h1>
-      <p className="mb-6 text-sm text-muted">Times are Malaysia time (GMT+8). Price now: <strong>{rm(q.finalPrice)}</strong>{q.promo ? ` (promotion until ${formatMy(q.promo.endsAt)})` : ""}.</p>
+      <p className="mb-6 text-sm text-muted">Times are Malaysia time (GMT+8). Prices now: <strong>{quotes.map((q) => `${q.nameEn} ${rm(q.finalPrice)}`).join(" · ")}</strong>{promo ? ` (promotion until ${formatMy(promo.endsAt)})` : ""}.</p>
       <Flash ok={sp.ok} bad={sp.bad} />
 
       <section id="payment" className="mb-6 scroll-mt-6 rounded-2xl border border-line bg-white p-5">
@@ -64,14 +65,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <form action={saveSettingsAction} className="space-y-6" data-testid="settings-form">
-        <Group title="Price (MYR, per document)">
-          <F label="Normal price (RM)"><input name="normalPrice" defaultValue={s.pricing.normalPrice} inputMode="decimal" className={adminInput} /></F>
+        <Group title="Packages (MYR, per document)" note="Untick a package to hide it from customers. Each package has its own normal and promotional price.">
+          {s.packages.map((pk) => (
+            <div key={pk.id} className="grid gap-3 rounded-xl border border-line p-3 sm:col-span-2 sm:grid-cols-2">
+              <label className={`${check} sm:col-span-2`}><input type="checkbox" name={`pkg_${pk.id}_enabled`} defaultChecked={pk.enabled} className="h-4 w-4" /> Offer this package</label>
+              <F label="Name (English)"><input name={`pkg_${pk.id}_nameEn`} defaultValue={pk.nameEn} className={adminInput} /></F>
+              <F label="Name (Bahasa Melayu)"><input name={`pkg_${pk.id}_nameMs`} defaultValue={pk.nameMs} className={adminInput} /></F>
+              <F label="Normal price (RM)"><input name={`pkg_${pk.id}_normal`} defaultValue={pk.normalPrice} inputMode="decimal" className={adminInput} /></F>
+              <F label="Promotional price (RM)"><input name={`pkg_${pk.id}_promo`} defaultValue={pk.promoPrice} inputMode="decimal" className={adminInput} /></F>
+            </div>
+          ))}
         </Group>
 
         <Group title="Promotion" note="The promotional price applies from the start time until the end time. At the end time the normal price applies automatically. Orders already placed keep their recorded price.">
           <label className={`${check} sm:col-span-2`}><input type="checkbox" name="promoEnabled" defaultChecked={p.enabled} className="h-4 w-4" /> Promotion enabled</label>
-          <F label="Promotional price (RM)"><input name="promoPrice" defaultValue={p.promoPrice} inputMode="decimal" className={adminInput} /></F>
-          <div />
           <F label="Label (English)"><input name="promoLabelEn" defaultValue={p.labelEn} className={adminInput} /></F>
           <F label="Label (Bahasa Melayu)"><input name="promoLabelMs" defaultValue={p.labelMs} className={adminInput} /></F>
           <F label="Starts (Malaysia time)"><input type="datetime-local" name="promoStart" defaultValue={p.startsAt ? isoToMyLocalInput(p.startsAt) : ""} className={adminInput} /></F>

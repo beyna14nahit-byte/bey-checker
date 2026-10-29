@@ -3,9 +3,9 @@ import { getT } from "@/lib/i18n-server";
 import { intlLocale } from "@/lib/i18n";
 import { getPublicState } from "@/lib/public-state";
 import { formatMy } from "@/lib/time";
-import { rmShort } from "@/lib/pricing";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { PriceWatcher } from "@/components/PriceWatcher";
+import KineticGrid from "@/components/ui/kinetic-grid";
 import { Container } from "@/components/ui/card";
 import { waLink } from "@/lib/contact";
 
@@ -13,18 +13,19 @@ export const dynamic = "force-dynamic";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const [{ lang, t }, state] = await Promise.all([getT(), getPublicState()]);
-  const promo = state.quote.promo;
+  const promo = state.quotes.find((q) => q.promo)?.promo ?? null;
   const label = promo ? (lang === "ms" ? promo.labelMs : promo.labelEn) || promo.labelEn : "";
   return (
-    <>
-      <PriceWatcher changesAt={state.quote.changesAt} serverTime={state.serverTime} />
+    <KineticGrid>
+      <PriceWatcher changesAt={state.changesAt} serverTime={state.serverTime} />
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2">
         {t("Skip to content")}
       </a>
       {promo && (
         <div className="bg-ink px-4 py-2 text-center text-xs text-white sm:text-sm" data-testid="promo-banner">
-          <span className="font-semibold">{label}:</span>{" "}
-          {t("{price} instead of {normal} until {date}.", { price: rmShort(state.quote.finalPrice), normal: rmShort(state.quote.normalPrice), date: formatMy(promo.endsAt, true, intlLocale(lang)) })}
+          <span className="font-semibold">{label}</span>{" "}
+          {t("until {date}.", { date: formatMy(promo.endsAt, true, intlLocale(lang)) })}{" "}
+          <a href="/#pricing" className="underline underline-offset-2">{t("See prices")}</a>
         </div>
       )}
       <header className="sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur">
@@ -37,7 +38,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         </Container>
       </header>
       <main id="main">{children}</main>
-      <footer className="mt-16 border-t border-line bg-white">
+      <footer className="mt-16 border-t border-line bg-white/90 backdrop-blur-[2px]">
         <Container className="flex flex-col gap-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
           <p>&copy; {new Date().getFullYear()} Bey Checker · {t("Manual AI detection report service, Malaysia.")}</p>
           <nav aria-label={t("Footer")} className="flex flex-wrap gap-x-5 gap-y-2">
@@ -52,6 +53,6 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           </nav>
         </Container>
       </footer>
-    </>
+    </KineticGrid>
   );
 }

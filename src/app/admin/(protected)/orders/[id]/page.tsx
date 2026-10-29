@@ -41,6 +41,7 @@ export default async function AdminOrder({ params, searchParams }: { params: Pro
         <div className="space-y-6">
           <Section title="Customer">
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div><dt className="text-muted">Package</dt><dd className="font-semibold" data-testid="admin-package">{o.package_name_en}</dd></div>
               <div><dt className="text-muted">Name</dt><dd>{o.customer_name}</dd></div>
               <div><dt className="text-muted">WhatsApp</dt><dd>+{o.whatsapp}</dd></div>
               <div><dt className="text-muted">Report delivery</dt><dd>{o.delivery_method === "email" ? `Email: ${o.email}` : "WhatsApp"}</dd></div>

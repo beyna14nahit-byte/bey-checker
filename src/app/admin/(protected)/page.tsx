@@ -3,12 +3,12 @@ import { headers } from "next/headers";
 import { CheckCircle2, CircleAlert } from "lucide-react";
 import { db } from "@/lib/db";
 import { getQrInfo, getSettings } from "@/lib/settings";
-import { getQuote, promotionIsValid, rm } from "@/lib/pricing";
+import { getQuotes, promotionWindowValid, rm } from "@/lib/pricing";
 import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/config";
 import { formatMy } from "@/lib/time";
 import { Flash, StatusPill, adminBtn, adminInput } from "@/components/admin";
 
-type Row = { id: string; reference: string; created_at: Date; customer_name: string; whatsapp: string; amount_due: string; status: OrderStatus; filename: string | null };
+type Row = { id: string; reference: string; created_at: Date; customer_name: string; whatsapp: string; amount_due: string; status: OrderStatus; filename: string | null; package_name_en: string };
 
 export default async function AdminHome({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; ok?: string; bad?: string }> }) {
   const sp = await searchParams;
@@ -17,14 +17,15 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const h = await headers();
   const host = h.get("x-forwarded-host") || h.get("host");
   const siteHost = process.env.SITE_URL ? (() => { try { return new URL(process.env.SITE_URL!).host; } catch { return "invalid"; } })() : null;
-  const quote = getQuote(s);
+  const quotes = getQuotes(s);
+  const promo = quotes.find((q) => q.promo)?.promo ?? null;
 
   const checklist: [boolean, string][] = [
     [qr.configured, "Payment QR uploaded (checkout stays closed without it)"],
     [!!s.contact.whatsapp, "Contact WhatsApp number set (checkout stays closed without it)"],
     [s.launch.uploadRulesConfirmed, "Accepted formats and file size confirmed"],
     [!!s.delivery.turnaroundEn && !!s.delivery.turnaroundMs, "Turnaround wording set (EN and BM)"],
-    [!s.promotion.enabled || promotionIsValid(s.promotion, s.pricing.normalPrice), s.promotion.enabled ? "Promotion dates valid" : "Promotion is off (set confirmed dates to enable it)"],
+    [!s.promotion.enabled || promotionWindowValid(s.promotion), s.promotion.enabled ? "Promotion dates valid" : "Promotion is off (set confirmed dates to enable it)"],
     [s.retention.confirmed, "File retention policy confirmed"],
     [siteHost === host, `SITE_URL matches this domain (${siteHost ?? "not set"})`],
   ];
@@ -33,7 +34,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const like = `%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
   const status = ORDER_STATUSES.includes(sp.status as OrderStatus) ? sp.status! : "";
   const rows = await sql<Row[]>`
-    select o.id, o.reference, o.created_at, o.customer_name, o.whatsapp, o.amount_due, o.status,
+    select o.id, o.reference, o.created_at, o.customer_name, o.whatsapp, o.amount_due, o.status, o.package_name_en,
       (select filename from files f where f.order_id = o.id and f.kind = 'document' limit 1) as filename
     from orders o where true
       ${q ? sql`and (o.reference ilike ${like} or o.customer_name ilike ${like} or o.whatsapp ilike ${like})` : sql``}
@@ -75,7 +76,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                   <tr key={o.id} className="hover:bg-paper" data-testid="admin-order-row">
                     <td className="px-3 py-2.5"><Link href={`/admin/orders/${o.id}`} className="font-mono font-semibold text-brand hover:underline">{o.reference}</Link><div className="text-xs text-muted">{formatMy(o.created_at)} · {o.filename ?? "file removed"}</div></td>
                     <td className="px-3 py-2.5">{o.customer_name}<div className="text-xs text-muted">+{o.whatsapp}</div></td>
-                    <td className="px-3 py-2.5 font-semibold">{rm(o.amount_due)}</td>
+                    <td className="px-3 py-2.5"><span className="font-semibold">{rm(o.amount_due)}</span><div className="text-xs text-muted">{o.package_name_en}</div></td>
                     <td className="px-3 py-2.5"><StatusPill status={o.status} /></td>
                   </tr>
                 ))}
@@ -97,9 +98,13 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             <Link href="/admin/settings" className="mt-4 inline-block text-sm font-semibold text-brand hover:underline">Open settings</Link>
           </div>
           <div className="rounded-2xl border border-line bg-white p-5 text-sm">
-            <h2 className="font-semibold">Price right now</h2>
-            <p className="mt-2 text-2xl font-bold">{rm(quote.finalPrice)}</p>
-            <p className="text-muted">{quote.promo ? `Promotion until ${formatMy(quote.promo.endsAt)}` : quote.changesAt ? `Promotion starts ${formatMy(quote.changesAt)}` : "Normal price"}</p>
+            <h2 className="font-semibold">Prices right now</h2>
+            <ul className="mt-2 space-y-1">
+              {quotes.map((q) => (
+                <li key={q.packageId} className="flex justify-between gap-3"><span>{q.nameEn}</span><strong>{rm(q.finalPrice)}</strong></li>
+              ))}
+            </ul>
+            <p className="mt-2 text-muted">{promo ? `Promotion until ${formatMy(promo.endsAt)}` : quotes.some((q) => q.changesAt) ? "Promotion scheduled" : "Normal prices"}</p>
           </div>
         </aside>
       </div>

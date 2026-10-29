@@ -1,7 +1,7 @@
 import { randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { db } from "./db";
-import type { OrderStatus, Settings } from "./config";
-import { getQuote, type Quote } from "./pricing";
+import { PACKAGE_IDS, type OrderStatus, type PackageId, type Settings } from "./config";
+import { enabledPackages, quoteFor, type Quote } from "./pricing";
 import { normalisePhone, validEmail } from "./contact";
 import type { ValidFile } from "./files";
 import { tEn, type Lang, type T } from "./i18n";
@@ -29,6 +29,7 @@ export class PriceChangedError extends Error {
 }
 
 export type OrderInput = {
+  packageId: PackageId;
   customerName: string;
   whatsapp: string;
   email: string | null;
@@ -40,6 +41,8 @@ export type OrderInput = {
 export function validateOrderInput(data: Record<string, unknown>, settings: Settings, hasFile: boolean, t: T = tEn): OrderInput {
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string).trim() : "");
   const errors: Record<string, string> = {};
+  const packageId = s("packageId") as PackageId;
+  if (!PACKAGE_IDS.includes(packageId) || !enabledPackages(settings).some((p) => p.id === packageId)) errors.packageId = t("Please choose a package.");
   const name = s("customerName");
   if (name.length < 2 || name.length > 100) errors.customerName = t("Please enter your name.");
   const phone = normalisePhone(s("whatsapp"));
@@ -59,7 +62,7 @@ export function validateOrderInput(data: Record<string, unknown>, settings: Sett
   const expected = Number(data.expectedAmount);
   if (!Number.isFinite(expected)) errors.form = t("Please review the price and confirm again.");
   if (Object.keys(errors).length) throw new ValidationError(errors);
-  return { customerName: name, whatsapp: phone!, email, note, idempotencyKey: key, expectedAmount: expected };
+  return { packageId, customerName: name, whatsapp: phone!, email, note, idempotencyKey: key, expectedAmount: expected };
 }
 
 export type OrderRow = {
@@ -75,6 +78,9 @@ export type OrderRow = {
   delivery_method: "whatsapp" | "email";
   note: string;
   lang: Lang;
+  package_id: PackageId;
+  package_name_en: string;
+  package_name_ms: string;
   currency: string;
   pricing_unit: string;
   normal_price: string;
@@ -109,7 +115,9 @@ export async function createOrder(input: OrderInput, file: ValidFile, settings: 
   const existing = await findByKey(input.idempotencyKey);
   if (existing) return { ...existing, duplicate: true };
 
-  const quote = getQuote(settings, now);
+  const pkg = enabledPackages(settings).find((p) => p.id === input.packageId);
+  if (!pkg) throw new ValidationError({ packageId: "Please choose a package." });
+  const quote = quoteFor(settings, pkg, now);
   if (Math.round(quote.finalPrice * 100) !== Math.round(input.expectedAmount * 100)) throw new PriceChangedError(quote);
 
   const promoLabel = quote.promo ? (lang === "ms" ? quote.promo.labelMs : quote.promo.labelEn) || quote.promo.labelEn : null;
@@ -121,17 +129,17 @@ export async function createOrder(input: OrderInput, file: ValidFile, settings: 
     try {
       const row = await db().begin(async (tx) => {
         const [o] = await tx<{ id: string; reference: string; access_token: string; amount_due: string }[]>`
-          insert into orders (reference, access_token, idempotency_key, customer_name, whatsapp, email, delivery_method,
+          insert into orders (reference, access_token, idempotency_key, package_id, package_name_en, package_name_ms, customer_name, whatsapp, email, delivery_method,
             note, lang, currency, pricing_unit, normal_price, discount, amount_due, promo_label, promo_ends_at,
             payment_due_at, authorised_at, terms_accepted_at, created_at)
-          values (${reference}, ${token}, ${input.idempotencyKey}, ${input.customerName}, ${input.whatsapp}, ${input.email},
+          values (${reference}, ${token}, ${input.idempotencyKey}, ${pkg.id}, ${pkg.nameEn}, ${pkg.nameMs}, ${input.customerName}, ${input.whatsapp}, ${input.email},
             ${settings.delivery.method}, ${input.note}, ${lang}, ${quote.currency}, ${quote.unit}, ${quote.normalPrice},
             ${quote.discount}, ${quote.finalPrice}, ${promoLabel}, ${quote.promo ? new Date(quote.promo.endsAt) : null},
             ${paymentDue}, ${now}, ${now}, ${now})
           returning id, reference, access_token, amount_due`;
         await tx`insert into files (order_id, kind, filename, mime, size, sha256, data)
           values (${o.id}, 'document', ${file.filename}, ${file.mime}, ${file.size}, ${file.sha256}, ${file.data})`;
-        await tx`insert into events (order_id, actor, message) values (${o.id}, 'customer', ${`Order placed at ${quote.currency} ${quote.finalPrice.toFixed(2)}.`})`;
+        await tx`insert into events (order_id, actor, message) values (${o.id}, 'customer', ${`Order placed: ${pkg.nameEn}, ${quote.currency} ${quote.finalPrice.toFixed(2)}.`})`;
         return o;
       });
       return { ...row, duplicate: false };

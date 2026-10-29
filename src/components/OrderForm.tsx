@@ -4,8 +4,8 @@ import { useRef, useState } from "react";
 import { ArrowLeft, FileText, Loader2 } from "lucide-react";
 import { intlLocale, translator, type Lang } from "@/lib/i18n";
 import type { PublicState } from "@/lib/public-state";
-import type { Quote } from "@/lib/pricing";
-import { rm } from "@/lib/pricing";
+import { packageName, rm, type Quote } from "@/lib/pricing";
+import type { PackageId } from "@/lib/config";
 import { formatMy } from "@/lib/time";
 import { buttonClass } from "./ui/button";
 import { Notice } from "./ui/card";
@@ -18,7 +18,7 @@ function newKey(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function OrderForm({ initial, lang }: { initial: PublicState; lang: Lang }) {
+export function OrderForm({ initial, lang, initialPackage = null }: { initial: PublicState; lang: Lang; initialPackage?: PackageId | null }) {
   const t = translator(lang);
   const [state, setState] = useState(initial);
   const [values, setValues] = useState<Values>({ customerName: "", whatsapp: "", email: "", note: "" });
@@ -27,6 +27,7 @@ export function OrderForm({ initial, lang }: { initial: PublicState; lang: Lang 
   const [terms, setTerms] = useState(false);
   const [step, setStep] = useState<"form" | "review">("form");
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [packageId, setPackageId] = useState<PackageId | null>(initialPackage);
   const [priceChange, setPriceChange] = useState<{ from: number; to: number } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
@@ -44,6 +45,7 @@ export function OrderForm({ initial, lang }: { initial: PublicState; lang: Lang 
 
   function checkLocally(): Record<string, string> {
     const e: Record<string, string> = {};
+    if (!packageId || !state.quotes.some((q) => q.packageId === packageId)) e.packageId = t("Please choose a package.");
     if (values.customerName.trim().length < 2) e.customerName = t("Please enter your name.");
     if (values.whatsapp.replace(/\D/g, "").length < 9) e.whatsapp = t("Please enter a valid WhatsApp number with country code, e.g. +60 12-345 6789.");
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(values.email.trim())) e.email = t("Please enter a valid email address for report delivery.");
@@ -64,7 +66,8 @@ export function OrderForm({ initial, lang }: { initial: PublicState; lang: Lang 
     const e = checkLocally();
     setErrors(e);
     if (Object.keys(e).length) {
-      document.getElementById(Object.keys(e)[0])?.focus();
+      const first = Object.keys(e)[0];
+      document.getElementById(first === "packageId" ? `package-${state.quotes[0]?.packageId}` : first)?.focus();
       return;
     }
     setBusy(true);
@@ -76,7 +79,12 @@ export function OrderForm({ initial, lang }: { initial: PublicState; lang: Lang 
         return;
       }
       setState(body);
-      setQuote(body.quote);
+      const current = (body.quotes as Quote[]).find((q) => q.packageId === packageId);
+      if (!current) {
+        setErrors({ packageId: t("Please choose a package.") });
+        return;
+      }
+      setQuote(current);
       setPriceChange(null);
       setStep("review");
       window.scrollTo({ top: (document.getElementById("order")?.offsetTop ?? 0) - 70, behavior: "smooth" });
@@ -94,7 +102,7 @@ export function OrderForm({ initial, lang }: { initial: PublicState; lang: Lang 
     setProgress(0);
     const res = await postForm<{ orderUrl: string }>(
       "/api/orders",
-      { ...values, authorised, terms, idempotencyKey: key.current, expectedAmount: quote.finalPrice },
+      { ...values, packageId, authorised, terms, idempotencyKey: key.current, expectedAmount: quote.finalPrice },
       file,
       setProgress,
       t,
@@ -121,7 +129,7 @@ export function OrderForm({ initial, lang }: { initial: PublicState; lang: Lang 
 
   if (step === "review" && quote && file) {
     const rows: [string, string, string?][] = [
-      [t("Service"), t("AI detection report (manual check)")],
+      [t("Package"), packageName(quote, lang)],
       [t("Document"), file.name],
       [t("Pricing unit"), t("Per document")],
       [t("Normal price"), rm(quote.normalPrice), "summary-normal"],
@@ -180,6 +188,37 @@ export function OrderForm({ initial, lang }: { initial: PublicState; lang: Lang 
         review();
       }}
     >
+      <fieldset>
+        <legend className="mb-2 text-sm font-medium">
+          {t("Choose your check")} <span className="text-bad" aria-hidden="true">*</span>
+        </legend>
+        <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-invalid={errors.packageId ? true : undefined}>
+          {state.quotes.map((q) => (
+            <label
+              key={q.packageId}
+              className={`flex cursor-pointer flex-col rounded-xl border bg-white p-3.5 transition-colors duration-200 has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-brand ${packageId === q.packageId ? "border-brand ring-2 ring-brand/20" : "border-line hover:border-brand/50"}`}
+            >
+              <input
+                id={`package-${q.packageId}`}
+                type="radio"
+                name="packageId"
+                value={q.packageId}
+                checked={packageId === q.packageId}
+                onChange={() => setPackageId(q.packageId)}
+                className="sr-only"
+                data-testid={`package-${q.packageId}`}
+              />
+              <span className="text-sm font-semibold">{packageName(q, lang)}</span>
+              <span className="mt-1 flex items-baseline gap-2">
+                <span className="text-lg font-bold">{rm(q.finalPrice)}</span>
+                {q.promo && <span className="text-xs text-muted line-through">{rm(q.normalPrice)}</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+        {errors.packageId && <p role="alert" className="mt-1 text-sm text-bad">{errors.packageId}</p>}
+      </fieldset>
+
       <div className="grid gap-5 sm:grid-cols-2">
         <Field id="customerName" label={t("Your name")} required error={errors.customerName}>
           <input id="customerName" className="input" value={values.customerName} onChange={(e) => set("customerName")(e.target.value)} autoComplete="name" maxLength={100} aria-invalid={errors.customerName ? true : undefined} />

@@ -1,6 +1,6 @@
 # Bey Checker
 
-A small website for ordering a **manually run AI detection report**. Customers upload one document, see the exact price, confirm the order, pay by DuitNow QR and upload their receipt. The owner verifies payment, runs the check by hand and sends the report.
+A small website for ordering **manually run check reports**: AI Check, Plagiarism / Similarity Check, or both (Combo). Customers choose a package, upload one document, see the exact price, confirm the order, pay by DuitNow QR and upload their receipt. The owner verifies payment, runs the check by hand and sends the report.
 
 The site does not detect AI itself and never shows detector results.
 
@@ -8,7 +8,7 @@ Stack: Next.js 15, TypeScript, Tailwind CSS v4 (shadcn-compatible `components.js
 
 ## How it works
 
-- **Pricing** (`src/lib/pricing.ts`) is computed on the server from the saved settings and the server clock.
+- **Packages and pricing** (`src/lib/pricing.ts`): each package has its own normal and promotional price, editable or hideable in `/admin/settings`. Prices are computed on the server from the saved settings and the server clock.
   - The promotion runs from its start time (inclusive) to its end time (exclusive). At the end time the normal price applies immediately, with no cron job or manual change.
   - Pages are never cached. A page left open refreshes itself at the start or end time.
 - **Orders** (`src/lib/orders.ts`):
@@ -25,6 +25,15 @@ Stack: Next.js 15, TypeScript, Tailwind CSS v4 (shadcn-compatible `components.js
   - a launch checklist showing what still needs confirming
 - **Testimonials** stay hidden on the website until at least one item with recorded consent is published.
 - **Languages**: English and Bahasa Melayu (`src/lib/i18n-ms.ts`), remembered in a cookie. `npm test` fails if a customer-facing string lacks a translation.
+
+## Owner details installed on deploy
+
+- `db/migrations/003_owner_details.sql` and `scripts/seed.ts` install the End of October 2026 sale (RM7 / RM4 / RM9 until 1 Nov 2026 00:00 MYT), the contact WhatsApp number and the Boost Bank DuitNow QR (`assets/payment-qr/`).
+- They only fill values never set in the admin dashboard, and the QR is installed once only, so removing it in the dashboard keeps it removed.
+
+## Background
+
+`src/components/ui/kinetic-grid.tsx` draws the interactive grid behind the public pages. It is decorative (`aria-hidden`) and only animates while the mouse moves. It is static on touch screens and for reduced motion.
 
 ## Environment variables (Vercel)
 
