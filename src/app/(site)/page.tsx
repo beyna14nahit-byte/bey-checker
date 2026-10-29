@@ -1,4 +1,4 @@
-import { FileCheck2, FileText, QrCode, ShieldCheck, Upload, UserCheck } from "lucide-react";
+import { FileCheck2, FileText, QrCode, Upload, UserCheck } from "lucide-react";
 import { getT } from "@/lib/i18n-server";
 import { intlLocale, type T } from "@/lib/i18n";
 import { getPublicState, toClientState } from "@/lib/public-state";
@@ -9,6 +9,7 @@ import { buttonClass } from "@/components/ui/button";
 import { Card, Container, Notice } from "@/components/ui/card";
 import { Reveal } from "@/components/Reveal";
 import { OrderForm } from "@/components/OrderForm";
+import { Pricing } from "@/components/ui/pricing";
 
 function FlowGraphic({ t }: { t: T }) {
   const steps = [
@@ -79,27 +80,32 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      <Container className="grid gap-6 py-12 md:grid-cols-2">
-        <Reveal>
-          <Card className="h-full" data-testid="price-card">
-            <p className="text-sm font-semibold text-brand">{t("Price")}</p>
-            <div className="mt-3 flex flex-wrap items-baseline gap-3" data-testid="price-card-amount">
-              <span className="text-5xl font-extrabold tracking-tight">{rm(q.finalPrice)}</span>
-              {q.promo && <span className="text-xl text-muted line-through">{rm(q.normalPrice)}</span>}
-            </div>
-            <p className="mt-1 text-sm text-muted">{t("per document · MYR")}</p>
-            {q.promo && (
-              <p className="pop mt-4 inline-flex rounded-full bg-brand-soft px-3 py-1 text-sm font-medium text-brand-dark">
-                {t("{promo} until {date}", { promo: promoLabel, date: formatMy(q.promo.endsAt, true, intlLocale(lang)) })}
-              </p>
-            )}
-            <ul className="mt-5 space-y-2 text-sm text-ink-soft">
-              <li className="flex gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden="true" />{t("One document per order. The price you see is the price you pay.")}</li>
-              <li className="flex gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden="true" />{t("Accepted: {types}, up to {mb} MB.", { types: state.formats.map((f) => f.toUpperCase()).join(", "), mb: state.maxMb })}</li>
-              {turnaround && <li className="flex gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden="true" />{t("Turnaround: {time}", { time: turnaround })}</li>}
-            </ul>
-          </Card>
-        </Reveal>
+      <Container className="grid items-start gap-6 py-12 md:grid-cols-2">
+        <Pricing
+          testId="price-card"
+          className="h-full"
+          plans={[
+            {
+              id: "ai",
+              name: t("AI detection report"),
+              price: rm(q.finalPrice),
+              normalPrice: q.promo ? rm(q.normalPrice) : null,
+              unit: t("per document · MYR"),
+              features: [
+                t("One document per order. The price you see is the price you pay."),
+                t("Checked manually by a person after your payment is verified"),
+                t("Report sent {delivery}", { delivery }),
+                t("Accepted: {types}, up to {mb} MB.", { types: state.formats.map((f) => f.toUpperCase()).join(", "), mb: state.maxMb }),
+                ...(turnaround ? [t("Turnaround: {time}", { time: turnaround })] : []),
+              ],
+              buttonText: t("Check AI"),
+              href: "#order",
+              // The badge only names a promotion that is actually running.
+              highlight: q.promo ? promoLabel : null,
+            },
+          ]}
+          note={q.promo ? t("{promo} until {date}", { promo: promoLabel, date: formatMy(q.promo.endsAt, true, intlLocale(lang)) }) : undefined}
+        />
         <Reveal>
           <Card className="h-full" >
             <p className="text-sm font-semibold text-brand">{t("Please note")}</p>

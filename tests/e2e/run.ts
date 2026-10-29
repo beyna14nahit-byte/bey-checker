@@ -116,7 +116,7 @@ async function main() {
     expect(r.status === 503, `API accepted order: ${r.status}`);
   });
   await test("Default price is RM9 with no promotion banner", async () => {
-    expect((await page.textContent("[data-testid=price-card-amount]"))?.includes("RM9.00"), "price");
+    expect((await page.textContent("[data-testid=price-card]"))?.includes("RM9.00"), "price");
     expect((await page.locator("[data-testid=promo-banner]").count()) === 0, "banner shown");
   });
   await test("First admin is created through /admin/setup; wrong token refused; setup then locked", async () => {
@@ -172,11 +172,20 @@ async function main() {
   await test("Active promotion: RM7 with RM9 crossed out, banner and deadline", async () => {
     await patchSettings((s) => Object.assign(s.promotion, { startsAt: iso(-3600e3), endsAt: iso(3600e3), labelEn: "Launch promotion", labelMs: "Promosi pelancaran" }));
     await page.goto(`${BASE}/`);
-    const card = await page.textContent("[data-testid=price-card-amount]");
+    const card = await page.textContent("[data-testid=price-card]");
     expect(card?.includes("RM7.00") && card.includes("RM9.00"), `card ${card}`);
     expect(await page.isVisible("[data-testid=promo-banner]"), "banner");
     expect((await page.textContent("[data-testid=promo-banner]"))?.includes("until"), "deadline");
   });
+  await test("Price card: promo badge only while active, no billing switch, Check AI goes to the order form", async () => {
+    const card = (await page.textContent("[data-testid=price-card]")) ?? "";
+    expect(card.includes("Launch promotion"), "promo badge missing during promotion");
+    expect((await page.locator("[role=switch]").count()) === 0 && !/annual|monthly|billed/i.test(card), "subscription UI present");
+    await page.click("[data-testid=price-card] >> text=Check AI");
+    await page.waitForFunction(() => location.hash === "#order");
+    expect(await page.isVisible("[data-testid=order-form]"), "order form not shown");
+  });
+
   await test("Order review shows service, unit, normal price, discount and final amount", async () => {
     await page.goto(`${BASE}/#order`);
     await fillOrderForm(page);
@@ -220,9 +229,9 @@ async function main() {
   await test("A page left open switches to the normal price at the exact end time (no reload)", async () => {
     await patchSettings((s) => Object.assign(s.promotion, { startsAt: iso(-3600e3), endsAt: iso(6000) }));
     await page.goto(`${BASE}/`);
-    expect((await page.textContent("[data-testid=price-card-amount]"))?.includes("RM7.00"), "not promo");
-    await page.waitForFunction(() => !document.querySelector("[data-testid=price-card-amount]")?.textContent?.includes("RM7.00"), null, { timeout: 15000 });
-    expect((await page.textContent("[data-testid=price-card-amount]"))?.includes("RM9.00"), "not normal");
+    expect((await page.textContent("[data-testid=price-card]"))?.includes("RM7.00"), "not promo");
+    await page.waitForFunction(() => !document.querySelector("[data-testid=price-card]")?.textContent?.includes("RM7.00"), null, { timeout: 15000 });
+    expect((await page.textContent("[data-testid=price-card]"))?.includes("RM9.00"), "not normal");
     expect((await page.locator("[data-testid=promo-banner]").count()) === 0, "banner still shown");
   });
   await test("Responses are not cacheable", async () => {

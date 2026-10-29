@@ -1,6 +1,9 @@
 // Bahasa Melayu translations keyed by the English text. Keep {placeholders} unchanged.
 // tests/unit/i18n.test.ts fails if any customer-facing string is missing here.
 export const MS: Record<string, string> = {
+  "AI detection report": "Laporan pengesanan AI",
+  "Checked manually by a person after your payment is verified": "Disemak secara manual oleh petugas selepas bayaran anda disahkan",
+  "Report sent {delivery}": "Laporan dihantar {delivery}",
   "...": "...",
   "A report showing the AI detection tool's result for your document, sent to you {delivery}.": "Laporan yang menunjukkan keputusan alat pengesanan AI untuk dokumen anda, dihantar kepada anda {delivery}.",
   "AI detection report (manual check)": "Laporan pengesanan AI (semakan manual)",
