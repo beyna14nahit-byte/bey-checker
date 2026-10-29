@@ -216,4 +216,6 @@ export const MS: Record<string, string> = {
   "{price} instead of {normal} until {date}.": "{price} berbanding {normal} sehingga {date}.",
   "{promo} discount": "Diskaun {promo}",
   "{promo} until {date}": "{promo} sehingga {date}",
+  "Trusted by students from top universities in Malaysia": "Dipercayai oleh pelajar dari universiti terkemuka di Malaysia",
+  "Logos belong to their respective universities. We are an independent service and are not affiliated with or endorsed by any university.": "Logo adalah milik universiti masing-masing. Kami perkhidmatan bebas dan tidak bergabung dengan atau disokong oleh mana-mana universiti.",
 };

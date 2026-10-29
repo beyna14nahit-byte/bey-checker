@@ -117,6 +117,22 @@ async function main() {
     const [row] = await sql`select data->'contact'->>'whatsapp' as w from settings`;
     expect(row.w === "60109882148", row.w);
   });
+  await test("Trusted by: nine universities listed and the logo rows move (static for reduced motion)", async () => {
+    await page.goto(`${BASE}/`);
+    const names = await page.locator("[data-testid=trusted-item]").allTextContents();
+    expect(names.length === 9 && names.some((n) => n.includes("UiTM")) && names.some((n) => n.includes("UniKL")), names.join("; "));
+    const row = page.locator("[data-testid=trusted-by] [data-marquee-row]").first();
+    const x1 = (await row.boundingBox())!.x;
+    await page.waitForTimeout(600);
+    expect((await row.boundingBox())!.x !== x1, "marquee not moving");
+    const rm = await browser.newPage({ reducedMotion: "reduce" });
+    await rm.goto(`${BASE}/`);
+    const still = rm.locator("[data-testid=trusted-by] [data-marquee-row]").first();
+    const r1 = (await still.boundingBox())!.x;
+    await rm.waitForTimeout(600);
+    expect((await still.boundingBox())!.x === r1, "reduced motion still animates");
+    await rm.close();
+  });
   await test("Three packages with the End of October Sale prices (normal prices after the sale)", async () => {
     const q = await (await fetch(`${BASE}/api/quote`)).json();
     const got = Object.fromEntries(q.quotes.map((x: any) => [x.packageId, x.finalPrice]));
