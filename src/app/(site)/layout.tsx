@@ -30,8 +30,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <header className="sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur">
         <Container className="flex h-16 items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
-            <span aria-hidden="true" className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-sm font-bold text-white">BY</span>
-            BY Checker
+            <span aria-hidden="true" className="inline-flex h-8 min-w-8 items-center justify-center rounded-lg bg-ink px-1.5 text-xs font-bold tracking-wide text-white">BEY</span>
+            Bey Checker
           </Link>
           <LanguageToggle lang={lang} />
         </Container>
@@ -39,7 +39,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <main id="main">{children}</main>
       <footer className="mt-16 border-t border-line bg-white">
         <Container className="flex flex-col gap-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>&copy; {new Date().getFullYear()} BY Checker · {t("Manual AI detection report service, Malaysia.")}</p>
+          <p>&copy; {new Date().getFullYear()} Bey Checker · {t("Manual AI detection report service, Malaysia.")}</p>
           <nav aria-label={t("Footer")} className="flex flex-wrap gap-x-5 gap-y-2">
             {state.whatsapp && (
               <a href={waLink(state.whatsapp)} target="_blank" rel="noopener noreferrer" className="hover:text-brand">

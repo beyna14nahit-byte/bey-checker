@@ -6,7 +6,7 @@ import { db } from "./db";
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
 
-export const SESSION_COOKIE = "byc_admin";
+export const SESSION_COOKIE = "bey_admin";
 const SESSION_HOURS = 12;
 
 export async function hashPassword(password: string): Promise<string> {

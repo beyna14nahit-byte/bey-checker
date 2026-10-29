@@ -42,7 +42,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const amount = Number(order.amount_due);
   const delivery = order.delivery_method === "email" ? t("by email to {email}", { email: order.email ?? "" }) : t("on WhatsApp to +{number}", { number: order.whatsapp });
   const instructions = lang === "ms" ? settings.payment.instructionsMs : settings.payment.instructionsEn;
-  const message = t("Hi BY Checker, I have a question about my order {ref}.", { ref: order.reference });
+  const message = t("Hi Bey Checker, I have a question about my order {ref}.", { ref: order.reference });
   const stepIndex = TRACK.indexOf(order.status);
 
   return (

@@ -1,4 +1,4 @@
--- BY Checker schema. The app connects as the database owner; row-level security is enabled with
+-- Bey Checker schema. The app connects as the database owner; row-level security is enabled with
 -- no policies so Supabase's public API roles cannot read or write any table.
 
 create table if not exists settings (

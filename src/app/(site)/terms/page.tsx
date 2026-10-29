@@ -12,7 +12,7 @@ export default async function TermsPage() {
     [
       t("The service"),
       [
-        t("BY Checker is a manual service. After your payment is verified, a person runs your document through an AI detection tool and sends you the report {delivery}.", { delivery }),
+        t("Bey Checker is a manual service. After your payment is verified, a person runs your document through an AI detection tool and sends you the report {delivery}.", { delivery }),
         t("Uploading a document does not check it automatically, and this website does not generate detection results by itself."),
         t("One order covers one document. The amount shown before you confirm is the amount you pay."),
       ],

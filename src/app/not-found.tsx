@@ -6,7 +6,7 @@ export default async function NotFound() {
   return (
     <main className="mx-auto max-w-xl px-4 py-24 text-center">
       <h1 className="text-3xl font-bold">{t("Page not found")}</h1>
-      <Link href="/" className="mt-6 inline-block font-semibold text-brand hover:underline">{t("Back to BY Checker")}</Link>
+      <Link href="/" className="mt-6 inline-block font-semibold text-brand hover:underline">{t("Back to Bey Checker")}</Link>
     </main>
   );
 }

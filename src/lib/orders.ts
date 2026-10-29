@@ -12,7 +12,7 @@ const ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
 export function makeReference(now: Date = new Date()): string {
   let code = "";
   for (let i = 0; i < 5; i++) code += ALPHABET[randomInt(ALPHABET.length)];
-  return `BYC-${todayMy(now).replace(/-/g, "").slice(2)}-${code}`;
+  return `BEY-${todayMy(now).replace(/-/g, "").slice(2)}-${code}`;
 }
 
 export class ValidationError extends Error {

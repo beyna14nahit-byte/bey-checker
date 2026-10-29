@@ -1,5 +1,5 @@
 // End-to-end tests against a running server (next start) and a TEST database.
-//   BASE_URL=http://localhost:3200 DATABASE_URL=postgres://.../byc_test SETUP_TOKEN=... CRON_SECRET=... \
+//   BASE_URL=http://localhost:3200 DATABASE_URL=postgres://.../bey_test SETUP_TOKEN=... CRON_SECRET=... \
 //   QR_FIXTURE=path/to/qr.png npm run test:e2e
 import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -139,7 +139,7 @@ async function main() {
       await p.goto(`${BASE}${u}`);
       expect(p.url().endsWith("/admin/login"), `${u} open`);
     }
-    await anon.addCookies([{ name: "byc_admin", value: "forged", url: BASE }]);
+    await anon.addCookies([{ name: "bey_admin", value: "forged", url: BASE }]);
     await p.goto(`${BASE}/admin`);
     expect(p.url().endsWith("/admin/login"), "forged cookie accepted");
     expect((await fetch(`${BASE}/api/admin/files/00000000-0000-0000-0000-000000000000`)).status === 401, "files open");
@@ -408,9 +408,9 @@ async function main() {
     await c.close();
   });
   await test("Server validation messages follow the chosen language", async () => {
-    const r = await apiOrder(baseOrder({ customerName: "" }), { name: "a.pdf", buffer: PDF }, "byc_lang=ms");
+    const r = await apiOrder(baseOrder({ customerName: "" }), { name: "a.pdf", buffer: PDF }, "bey_lang=ms");
     expect(r.status === 422 && r.body.errors.customerName === "Sila masukkan nama anda.", JSON.stringify(r.body));
-    const p2 = await apiOrder(baseOrder({ expectedAmount: 1 }), { name: "a.pdf", buffer: PDF }, "byc_lang=ms");
+    const p2 = await apiOrder(baseOrder({ expectedAmount: 1 }), { name: "a.pdf", buffer: PDF }, "bey_lang=ms");
     expect(p2.body.message.startsWith("Harga telah berubah"), p2.body.message);
   });
 

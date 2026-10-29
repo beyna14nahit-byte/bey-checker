@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <main className="flex min-h-screen items-center justify-center px-4">
       <form method="post" action="/api/admin/login" className="w-full max-w-sm rounded-2xl border border-line bg-white p-6">
         <h1 className="text-xl font-bold">Administrator sign in</h1>
-        <p className="mt-1 text-sm text-muted">BY Checker dashboard</p>
+        <p className="mt-1 text-sm text-muted">Bey Checker dashboard</p>
         {error && (
           <p role="alert" className="mt-4 rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">
             {error}

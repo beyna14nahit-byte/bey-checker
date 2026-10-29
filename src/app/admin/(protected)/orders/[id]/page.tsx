@@ -26,8 +26,8 @@ export default async function AdminOrder({ params, searchParams }: { params: Pro
   const base = process.env.SITE_URL?.replace(/\/$/, "") || `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   const link = `${base}${orderPath(o.reference, o.access_token)}`;
   const msg = o.lang === "ms"
-    ? `Hai ${o.customer_name}, ini BY Checker tentang pesanan ${o.reference}. Status pesanan anda: ${link}`
-    : `Hi ${o.customer_name}, this is BY Checker about order ${o.reference}. Your order status: ${link}`;
+    ? `Hai ${o.customer_name}, ini Bey Checker tentang pesanan ${o.reference}. Status pesanan anda: ${link}`
+    : `Hi ${o.customer_name}, this is Bey Checker about order ${o.reference}. Your order status: ${link}`;
 
   return (
     <>

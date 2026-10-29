@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <nav className="flex flex-wrap items-center gap-1 text-sm font-medium" aria-label="Admin">
-            <span className="mr-3 font-extrabold">BY Checker admin</span>
+            <span className="mr-3 font-extrabold">Bey Checker admin</span>
             <Link href="/admin" className="rounded-lg px-2.5 py-1.5 hover:bg-secondary">Orders</Link>
             <Link href="/admin/settings" className="rounded-lg px-2.5 py-1.5 hover:bg-secondary">Settings</Link>
             <Link href="/admin/testimonials" className="rounded-lg px-2.5 py-1.5 hover:bg-secondary">Testimonials</Link>

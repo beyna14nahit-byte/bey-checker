@@ -2,8 +2,8 @@
 # Recreates the local TEST database, migrates and seeds it, and starts the production build on :3200.
 set -euo pipefail
 : "${TEST_DB_ADMIN_URL:=postgres://postgres@localhost:5433/postgres}"
-: "${DATABASE_URL:=postgres://postgres@localhost:5433/byc_test}"
-psql "$TEST_DB_ADMIN_URL" -qc "drop database if exists byc_test with (force)" -c "create database byc_test"
+: "${DATABASE_URL:=postgres://postgres@localhost:5433/bey_test}"
+psql "$TEST_DB_ADMIN_URL" -qc "drop database if exists bey_test with (force)" -c "create database bey_test"
 DATABASE_URL=$DATABASE_URL npx tsx scripts/migrate.ts
 DATABASE_URL=$DATABASE_URL npx tsx scripts/seed.ts
 fuser -k 3200/tcp 2>/dev/null || true

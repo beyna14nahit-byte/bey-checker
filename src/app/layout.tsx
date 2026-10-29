@@ -3,7 +3,7 @@ import "./globals.css";
 import { getLang } from "@/lib/i18n-server";
 
 export const metadata: Metadata = {
-  title: { default: "BY Checker | AI detection report", template: "%s | BY Checker" },
+  title: { default: "Bey Checker | AI detection report", template: "%s | Bey Checker" },
   description: "Order a manually run AI detection report for your document. Clear price, simple DuitNow QR payment.",
 };
 

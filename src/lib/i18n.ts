@@ -5,7 +5,7 @@ import { MS } from "./i18n-ms";
 // call in src/ has a Bahasa Melayu entry.
 
 export type Lang = "en" | "ms";
-export const LANG_COOKIE = "byc_lang";
+export const LANG_COOKIE = "bey_lang";
 export type Vars = Record<string, string | number>;
 export type T = (text: string, vars?: Vars) => string;
 

@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (pathname === "/admin/login" || pathname === "/admin/setup") return NextResponse.next();
-  if (!req.cookies.get("byc_admin")) {
+  if (!req.cookies.get("bey_admin")) {
     if (pathname.startsWith("/api/admin")) return NextResponse.json({ ok: false }, { status: 401 });
     return NextResponse.redirect(new URL("/admin/login", req.url));
   }
