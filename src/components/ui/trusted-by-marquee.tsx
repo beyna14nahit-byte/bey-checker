@@ -20,7 +20,7 @@ function Tile({ item }: { item: MarqueeLogo }) {
       {item.logo ? (
         // Plain img so SVG and raster logos both work without image optimisation config.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.logo} alt="" className="max-h-14 w-auto max-w-full object-contain sm:max-h-16" loading="lazy" decoding="async" />
+        <img src={item.logo} alt="" className="max-h-14 w-auto max-w-full object-contain sm:max-h-[4.5rem]" loading="lazy" decoding="async" />
       ) : (
         <span className="text-xl font-extrabold tracking-tight text-ink-soft sm:text-2xl">{item.short}</span>
       )}
@@ -77,7 +77,8 @@ export function TrustedByMarquee({
   className?: string;
   testId?: string;
 }) {
-  const half = Math.ceil(items.length / 2);
+  // Two rows only when there are enough logos to fill both without visible repeats.
+  const half = items.length >= 8 ? Math.ceil(items.length / 2) : items.length;
   const rows = [items.slice(0, half), items.slice(half)].filter((r) => r.length > 0);
 
   return (

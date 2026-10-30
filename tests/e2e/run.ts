@@ -118,10 +118,16 @@ async function main() {
     const [row] = await sql`select data->'contact'->>'whatsapp' as w from settings`;
     expect(row.w === "60109882148", row.w);
   });
-  await test("Trusted by: nine universities listed and the logo rows move (static for reduced motion)", async () => {
+  await test("Trusted by: university logos listed and the logo row moves (static for reduced motion)", async () => {
     await page.goto(`${BASE}/`);
     const names = await page.locator("[data-testid=trusted-item]").allTextContents();
-    expect(names.length === 9 && names.some((n) => n.includes("UiTM")) && names.some((n) => n.includes("UniKL")), names.join("; "));
+    // Only universities with a logo file are listed, and every logo image loads.
+    expect(names.length === 5 && ["UiTM", "UM)", "UKM", "UTeM", "UPM"].every((u) => names.some((n) => n.includes(u))), names.join("; "));
+    const logos = page.locator("[data-testid=trusted-by] img");
+    await page.locator("#trusted-title").scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => [...document.querySelectorAll("[data-testid=trusted-by] img")].slice(0, 5).every((i) => (i as HTMLImageElement).complete));
+    expect(await logos.evaluateAll((els) => els.slice(0, 5).every((i) => (i as HTMLImageElement).naturalWidth > 0)), "a logo did not load");
+    expect((await page.textContent("[data-testid=trusted-by] [data-marquee-row]"))?.trim() === "", "a name shown instead of a logo");
     const row = page.locator("[data-testid=trusted-by] [data-marquee-row]").first();
     const x1 = (await row.boundingBox())!.x;
     await page.waitForTimeout(600);

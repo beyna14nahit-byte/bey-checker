@@ -13,7 +13,7 @@ import { Reveal } from "@/components/Reveal";
 import { OrderForm } from "@/components/OrderForm";
 import { AnimatedCountdown } from "@/components/ui/animated-countdown";
 import { TrustedByMarquee } from "@/components/ui/trusted-by-marquee";
-import { UNIVERSITIES } from "@/lib/universities";
+import { UNIVERSITIES_WITH_LOGOS } from "@/lib/universities";
 
 function FlowGraphic({ t }: { t: T }) {
   const steps = [
@@ -106,14 +106,16 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </Container>
       </section>
 
-      <TrustedByMarquee
-        testId="trusted-by"
-        title={t("Trusted by students from top universities in Malaysia")}
-        note={t("Logos belong to their respective universities. We are an independent service and are not affiliated with or endorsed by any university.")}
-        items={UNIVERSITIES}
-        accent="var(--color-brand)"
-        className="border-b border-line/70 bg-white/80 backdrop-blur-[2px]"
-      />
+      {UNIVERSITIES_WITH_LOGOS.length > 0 && (
+        <TrustedByMarquee
+          testId="trusted-by"
+          title={t("Trusted by students from top universities in Malaysia")}
+          note={t("Logos belong to their respective universities. We are an independent service and are not affiliated with or endorsed by any university.")}
+          items={UNIVERSITIES_WITH_LOGOS}
+          accent="var(--color-brand)"
+          className="border-b border-line/70 bg-white/80 backdrop-blur-[2px]"
+        />
+      )}
 
       <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-20">
         <Container className="py-12">
