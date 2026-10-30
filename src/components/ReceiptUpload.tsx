@@ -31,7 +31,18 @@ export function ReceiptUpload({ reference, accessKey, lang, again }: { reference
         setProgress(0);
         const res = await postForm(`/api/orders/${encodeURIComponent(reference)}/receipt`, { k: accessKey, paymentReference }, file, setProgress, t);
         setProgress(null);
-        if (res.ok) router.refresh();
+        if (res.ok) {
+          router.refresh();
+          // Bring the "send on WhatsApp" step into view once the refreshed page shows it.
+          let tries = 0;
+          const id = setInterval(() => {
+            const el = document.getElementById("send-title");
+            if (el || ++tries > 30) {
+              clearInterval(id);
+              el?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          }, 100);
+        }
         else setError(res.message);
       }}
     >

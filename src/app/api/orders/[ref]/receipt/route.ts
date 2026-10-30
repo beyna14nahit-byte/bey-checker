@@ -15,7 +15,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ ref: string }>
     if (!(await consume("receipt", clientIp(req)))) return jsonError(t("Too many attempts from your connection. Please wait an hour or contact us."), 429);
     const { ref } = await ctx.params;
     const maxMb = Math.min(4, hostLimitMb());
-    const { data, file } = await readForm(req, maxMb, t);
+    const { data, files } = await readForm(req, maxMb, t);
+    const file = files[0];
     const order = await getOrderForCustomer(ref, typeof data.k === "string" ? data.k : "");
     if (!order) return jsonError(t("Order not found. Please use the private link from your order confirmation."), 404);
     if (!canUploadReceipt(order)) return jsonError(t("This order is not accepting payment receipts. Please contact us."), 409);

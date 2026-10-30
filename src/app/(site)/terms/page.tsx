@@ -14,7 +14,7 @@ export default async function TermsPage() {
       [
         t("Bey Checker is a manual service. After your payment is verified, a person runs your document through the checking tool for the package you chose (AI detection, similarity, or both) and sends you the report {delivery}.", { delivery }),
         t("Uploading a document does not check it automatically, and this website does not generate detection results by itself."),
-        t("One order covers one document. The amount shown before you confirm is the amount you pay."),
+        t("Each document in an order is priced by the check you choose for it. The amount shown before you confirm is the amount you pay."),
       ],
     ],
     [

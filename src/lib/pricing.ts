@@ -87,3 +87,39 @@ export function rm(n: number | string | null | undefined): string {
 export function rmShort(n: number): string {
   return Number.isInteger(n) ? `RM${n}` : `RM${n.toFixed(2)}`;
 }
+
+/** Most documents one order can hold. All files travel in one upload, so the host limit covers their total size. */
+export const MAX_DOCUMENTS = 5;
+
+export type Basket = {
+  items: Quote[];
+  normalTotal: number;
+  discountTotal: number;
+  total: number;
+  /** Packages in first-seen order with how many documents use each, e.g. 2 × similarity, 1 × ai. */
+  lines: { quote: Quote; count: number; subtotal: number }[];
+};
+
+/** Prices a list of chosen packages (one per document) from the given quotes. Returns null if any package is unavailable. */
+export function priceBasket(quotes: Quote[], packageIds: readonly string[]): Basket | null {
+  const items: Quote[] = [];
+  for (const id of packageIds) {
+    const q = quotes.find((x) => x.packageId === id);
+    if (!q) return null;
+    items.push(q);
+  }
+  const sum = (f: (q: Quote) => number) => items.reduce((n, q) => n + cents(f(q)), 0) / 100;
+  const lines: Basket["lines"] = [];
+  for (const q of items) {
+    const line = lines.find((l) => l.quote.packageId === q.packageId);
+    if (line) line.count++;
+    else lines.push({ quote: q, count: 1, subtotal: 0 });
+  }
+  for (const l of lines) l.subtotal = (cents(l.quote.finalPrice) * l.count) / 100;
+  return { items, normalTotal: sum((q) => q.normalPrice), discountTotal: sum((q) => q.discount), total: sum((q) => q.finalPrice), lines };
+}
+
+/** The part of a basket the browser needs after a price change. */
+export function basketForClient(b: Basket) {
+  return { total: b.total, normalTotal: b.normalTotal, discountTotal: b.discountTotal, items: b.items };
+}

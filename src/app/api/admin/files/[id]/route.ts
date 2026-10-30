@@ -6,7 +6,13 @@ export const dynamic = "force-dynamic";
 
 // Customer documents and receipts are only served through this authenticated route.
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await currentAdmin())) return new Response("Unauthorised", { status: 401 });
+  if (!(await currentAdmin())) {
+    // Expired session: sign in again, then come back to this file.
+    const u = new URL(req.url);
+    const login = new URL("/admin/login", req.url);
+    login.searchParams.set("next", u.pathname + u.search);
+    return Response.redirect(login, 303);
+  }
   const { id } = await ctx.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) return new Response("Not found", { status: 404 });
   const rows = await db()<{ filename: string; mime: string; data: Buffer }[]>`select filename, mime, data from files where id = ${id}`;

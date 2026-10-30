@@ -1,13 +1,15 @@
 import { tEn, type T } from "@/lib/i18n";
 import type { Quote } from "@/lib/pricing";
 
-export type ApiResult<R> = ({ ok: true } & R) | { ok: false; message: string; errors?: Record<string, string>; code?: string; quote?: Quote };
+export type ClientBasket = { total: number; normalTotal: number; discountTotal: number; items: Quote[] };
 
-/** Posts JSON data plus one file with upload progress (0-100). */
-export function postForm<R>(url: string, data: unknown, file: File | null, onProgress?: (pct: number) => void, t: T = tEn): Promise<ApiResult<R>> {
+export type ApiResult<R> = ({ ok: true } & R) | { ok: false; message: string; errors?: Record<string, string>; code?: string; basket?: ClientBasket };
+
+/** Posts JSON data plus files (in order) with upload progress (0-100). */
+export function postForm<R>(url: string, data: unknown, file: File | File[] | null, onProgress?: (pct: number) => void, t: T = tEn): Promise<ApiResult<R>> {
   const form = new FormData();
   form.append("data", JSON.stringify(data));
-  if (file) form.append("file", file, file.name);
+  for (const f of Array.isArray(file) ? file : file ? [file] : []) form.append("file", f, f.name);
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);

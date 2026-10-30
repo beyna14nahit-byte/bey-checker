@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import { CheckCircle2, Circle, MessageCircle } from "lucide-react";
+import { CheckCircle2, Circle, FileText, MessageCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { getT } from "@/lib/i18n-server";
 import { intlLocale } from "@/lib/i18n";
-import { canUploadReceipt, getOrderForCustomer, paymentDeadlinePassed } from "@/lib/orders";
+import { canUploadReceipt, getOrderForCustomer, getOrderItems, paymentDeadlinePassed } from "@/lib/orders";
+import { ownerMessage } from "@/lib/order-message";
+import { siteBase } from "@/lib/site-url";
 import { getQrInfo, getSettings } from "@/lib/settings";
 import { STATUS_LABELS, type OrderStatus } from "@/lib/config";
 import { rm } from "@/lib/pricing";
@@ -13,6 +15,7 @@ import { buttonClass } from "@/components/ui/button";
 import { Card, Container, Notice } from "@/components/ui/card";
 import { QrViewer } from "@/components/QrViewer";
 import { ReceiptUpload } from "@/components/ReceiptUpload";
+import { ShareFiles } from "@/components/ShareFiles";
 
 export const metadata: Metadata = { title: "Your order", robots: { index: false, follow: false } };
 
@@ -35,30 +38,26 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     );
   }
 
-  const [doc] = await db()<{ filename: string }[]>`select filename from files where order_id = ${order.id} and kind = 'document' order by created_at limit 1`;
-  const qr = await getQrInfo();
+  const [items, receipts, qr, base] = await Promise.all([
+    getOrderItems(order.id),
+    db()<{ id: string; filename: string; mime: string }[]>`select id, filename, mime from files where order_id = ${order.id} and kind = 'receipt' order by created_at desc limit 1`,
+    getQrInfo(),
+    siteBase(),
+  ]);
+  const receipt = receipts[0] ?? null;
   const deadlinePassed = paymentDeadlinePassed(order);
   const uploadOpen = canUploadReceipt(order);
   const amount = Number(order.amount_due);
   const delivery = order.delivery_method === "email" ? t("by email to {email}", { email: order.email ?? "" }) : t("on WhatsApp to +{number}", { number: order.whatsapp });
   const instructions = lang === "ms" ? settings.payment.instructionsMs : settings.payment.instructionsEn;
-  const pkgName = order.lang === "ms" ? order.package_name_ms : order.package_name_en;
-  const statusLine = order.status === "awaiting_payment" ? "Awaiting payment" : order.status === "payment_review" ? "Receipt uploaded, payment under review" : STATUS_LABELS[order.status];
-  // Sent to the owner, so always in the same English format. Contains order details only:
-  // the document itself never goes through WhatsApp (the owner downloads it from the dashboard).
-  const message = [
-    "Hi Bey Checker, here are my order details:",
-    "",
-    `Order reference: ${order.reference}`,
-    `Package: ${order.package_name_en}`,
-    `Amount: ${rm(amount)}`,
-    `Name: ${order.customer_name}`,
-    `WhatsApp: +${order.whatsapp}`,
-    ...(order.email ? [`Email: ${order.email}`] : []),
-    `Document: ${doc?.filename ?? "-"}`,
-    `Status: ${statusLine}`,
-    ...(order.note ? [`Note: ${order.note.slice(0, 300)}`] : []),
-  ].join("\n");
+  const nameOf = (i: { package_name_en: string; package_name_ms: string }) => (lang === "ms" ? i.package_name_ms || i.package_name_en : i.package_name_en);
+  const message = ownerMessage(order, items, receipt, base);
+  const paidAndSent = order.status === "payment_review";
+  const fileUrl = (id: string) => `/api/orders/${encodeURIComponent(order.reference)}/files/${id}?k=${encodeURIComponent(k)}`;
+  const shareable = [
+    ...items.flatMap((i) => (i.file_id ? [{ url: fileUrl(i.file_id), name: i.filename, mime: "application/octet-stream" }] : [])),
+    ...(receipt ? [{ url: fileUrl(receipt.id), name: receipt.filename, mime: receipt.mime }] : []),
+  ];
   const stepIndex = TRACK.indexOf(order.status);
 
   return (
@@ -90,14 +89,35 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         {t("Current status:")} <strong data-testid="order-status">{t(STATUS_LABELS[order.status])}</strong>
       </p>
 
+      {contact && paidAndSent && (
+        <section aria-labelledby="send-title" className="pop rounded-2xl border-2 border-brand/30 bg-white p-5 sm:p-7" data-testid="send-section">
+          <h2 id="send-title" className="text-xl font-bold">{t("Last step: send your order to us on WhatsApp")}</h2>
+          <p className="mt-2 text-sm text-ink-soft">{t("Tap the button to open WhatsApp with your order, payment and file details already written. Just press send.")}</p>
+          <a href={waLink(contact, message)} target="_blank" rel="noopener noreferrer" className={`${buttonClass("primary")} mt-4 w-full sm:w-auto`} data-testid="order-whatsapp">
+            <MessageCircle className="h-4 w-4" aria-hidden="true" /> {t("Send order on WhatsApp")}
+          </a>
+          <p className="mt-3 text-xs text-muted">{t("Your files are already safely with us, so you do not need to attach them.")}</p>
+          <ShareFiles files={shareable} text={message} lang={lang} className="mt-5 border-t border-line pt-5" />
+        </section>
+      )}
+
       <Card>
         <h2 className="font-semibold">{t("Order details")}</h2>
         <dl className="mt-3 divide-y divide-line text-sm">
+          {items.map((i) => (
+            <div key={i.id} className="flex justify-between gap-4 py-2.5" data-testid="order-item">
+              <dt className="min-w-0">
+                <span className="font-medium">{nameOf(i)}</span>
+                <span className="mt-0.5 flex items-center gap-1.5 text-muted">
+                  <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 break-all">{i.file_id ? i.filename : t("Removed under our retention policy")}</span>
+                </span>
+              </dt>
+              <dd className="shrink-0 text-right">{rm(i.price)}</dd>
+            </div>
+          ))}
           {[
-            [t("Package"), pkgName],
-            [t("Document"), doc?.filename ?? t("Removed under our retention policy")],
-            [t("Pricing unit"), t("Per document")],
-            [t("Normal price"), rm(order.normal_price)],
+            ...(Number(order.discount) > 0 ? [[t("Normal price"), rm(order.normal_price)]] : []),
             ...(Number(order.discount) > 0 ? [[order.promo_label ? t("{promo} discount", { promo: order.promo_label }) : t("Discount"), `-${rm(order.discount)}`]] : []),
             [t("Report delivery"), delivery],
             [t("Placed"), fmt(order.created_at)],
@@ -130,7 +150,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       )}
 
       {(order.status === "payment_verified" || order.status === "processing") && (
-        <Notice tone="ok" data-testid="payment-verified">{t("Payment verified. We will run your AI check and send the report {delivery}.", { delivery })}</Notice>
+        <Notice tone="ok" data-testid="payment-verified">{t("Payment verified. We will run your checks and send the report {delivery}.", { delivery })}</Notice>
       )}
 
       {order.status === "completed" && (
@@ -171,18 +191,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         </details>
       )}
 
-      {contact && (order.status === "awaiting_payment" || order.status === "payment_review") && (
-        <p className="text-sm text-ink-soft">{t("After paying, tap the button below to send us your order details on WhatsApp. Your document is already with us; you do not need to send it again.")}</p>
+      {contact && order.status === "awaiting_payment" && uploadOpen && (
+        <p className="text-sm text-ink-soft" data-testid="send-after-receipt">{t("After you upload your receipt, a button will appear to send your order to us on WhatsApp in one tap.")}</p>
       )}
-      {contact && (
-        <a
-          href={waLink(contact, message)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={order.status === "awaiting_payment" || order.status === "payment_review" ? `${buttonClass("primary")} w-full sm:w-auto` : buttonClass("secondary")}
-          data-testid="order-whatsapp"
-        >
-          <MessageCircle className="h-4 w-4" aria-hidden="true" /> {t("Send order details on WhatsApp")}
+
+      {contact && !paidAndSent && (
+        <a href={waLink(contact, lang === "ms" ? `Hai Bey Checker, tentang pesanan ${order.reference}: ` : `Hi Bey Checker, about order ${order.reference}: `)} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary")} data-testid="order-whatsapp">
+          <MessageCircle className="h-4 w-4" aria-hidden="true" /> {order.status === "awaiting_payment" ? t("Questions? WhatsApp us") : t("Contact us on WhatsApp")}
         </a>
       )}
     </Container>

@@ -47,10 +47,11 @@ const SALE_ACTIVE = Date.now() < Date.parse("2026-11-01T00:00:00+08:00");
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 
-async function apiOrder(data: Record<string, unknown>, file: { name: string; buffer: Buffer } | null, cookie = "") {
+type Upload = { name: string; buffer: Buffer };
+async function apiOrder(data: Record<string, unknown>, file: Upload | Upload[] | null, cookie = "") {
   const form = new FormData();
   form.append("data", JSON.stringify(data));
-  if (file) form.append("file", new Blob([new Uint8Array(file.buffer)]), file.name);
+  for (const f of Array.isArray(file) ? file : file ? [file] : []) form.append("file", new Blob([new Uint8Array(f.buffer)]), f.name);
   const res = await fetch(`${BASE}/api/orders`, { method: "POST", body: form, headers: cookie ? { cookie } : {} });
   return { status: res.status, body: (await res.json()) as any };
 }
@@ -67,10 +68,10 @@ const baseOrder = (over: Record<string, unknown> = {}) => ({
 });
 
 async function fillOrderForm(p: Page, fileName = "essay.docx", buf?: Buffer, pkg = "ai") {
-  await p.click(`label:has([data-testid=package-${pkg}])`);
+  await p.click(`label:has([data-testid=doc-0-package-${pkg}])`);
   await p.fill("#customerName", "Nur Ujian");
   await p.fill("#whatsapp", "+60 12-345 6789");
-  await p.setInputFiles("[data-testid=document-input]", { name: fileName, mimeType: "application/octet-stream", buffer: buf ?? (await docx(300)) });
+  await p.setInputFiles("[data-testid=doc-0-file]", { name: fileName, mimeType: "application/octet-stream", buffer: buf ?? (await docx(300)) });
   await p.check("#authorised");
   await p.check("#terms");
 }
@@ -164,12 +165,15 @@ async function main() {
     const p = await anon.newPage();
     for (const u of ["/admin", "/admin/settings", "/admin/testimonials"]) {
       await p.goto(`${BASE}${u}`);
-      expect(p.url().endsWith("/admin/login"), `${u} open`);
+      expect(new URL(p.url()).pathname === "/admin/login", `${u} open`);
     }
     await anon.addCookies([{ name: "bey_admin", value: "forged", url: BASE }]);
     await p.goto(`${BASE}/admin`);
-    expect(p.url().endsWith("/admin/login"), "forged cookie accepted");
-    expect((await fetch(`${BASE}/api/admin/files/00000000-0000-0000-0000-000000000000`)).status === 401, "files open");
+    expect(new URL(p.url()).pathname === "/admin/login", "forged cookie accepted");
+    for (const cookie of ["", "bey_admin=forged"]) {
+      const r = await fetch(`${BASE}/api/admin/files/00000000-0000-0000-0000-000000000000`, { redirect: "manual", headers: cookie ? { cookie } : {} });
+      expect([303, 307].includes(r.status) && r.headers.get("location")?.includes("/admin/login?next="), `files open (${cookie || "no cookie"}): ${r.status}`);
+    }
     await anon.close();
   });
 
@@ -220,9 +224,17 @@ async function main() {
     expect((await page.locator("[data-testid=price-card-card-combo] >> text=Best value").count()) === 1, "combo badge");
     expect((await page.locator("[data-testid=price-card] >> text=Best value").count()) === 1, "badge on other cards");
     expect((await page.locator("[role=switch]").count()) === 0 && !/annual|monthly|billed/i.test(card), "subscription UI present");
+    if (SALE_ACTIVE) {
+      const cd = (await page.textContent("[data-testid=sale-countdown]")) ?? "";
+      expect(cd.includes("Sale prices end in") && cd.includes("Days") && cd.includes("Seconds"), cd);
+      await page.waitForFunction(() => /^\d{2}/.test(document.querySelector("[data-unit=seconds]")?.textContent ?? ""));
+      const box = (await page.locator("[data-testid=sale-countdown]").boundingBox())!;
+      const pricing = (await page.locator("[data-testid=price-card-card-ai]").boundingBox())!;
+      expect(box.y + box.height <= pricing.y, "countdown is not above the prices");
+    }
     await page.click("[data-testid=price-card-card-similarity] >> text=Choose");
     await page.waitForURL(/package=similarity#order/);
-    expect(await page.isChecked("[data-testid=package-similarity]"), "package not preselected");
+    expect(await page.isChecked("[data-testid=doc-0-package-similarity]"), "package not preselected");
   });
 
   await test("Order review shows service, unit, normal price, discount and final amount", async () => {
@@ -231,7 +243,7 @@ async function main() {
     await page.click("[data-testid=review-order]");
     await page.waitForSelector("[data-testid=order-review]");
     const txt = await page.textContent("[data-testid=order-review]");
-    for (const s of ["AI Check", "essay.docx", "Per document", "WhatsApp: +60 12-345 6789"]) expect(txt?.includes(s), `missing ${s}`);
+    for (const s of ["AI Check", "essay.docx", "WhatsApp: +60 12-345 6789"]) expect(txt?.includes(s), `missing ${s}`);
     expect((await page.textContent("[data-testid=summary-normal]")) === "RM9.00", "normal");
     expect((await page.textContent("[data-testid=summary-discount]")) === "-RM2.00", "discount");
     expect((await page.textContent("[data-testid=summary-total]")) === "RM7.00", "total");
@@ -272,6 +284,7 @@ async function main() {
     await page.waitForFunction(() => !document.querySelector("[data-testid=price-card]")?.textContent?.includes("RM7.00"), null, { timeout: 15000 });
     expect((await page.textContent("[data-testid=price-card]"))?.includes("RM9.00"), "not normal");
     expect((await page.locator("[data-testid=promo-banner]").count()) === 0, "banner still shown");
+    expect((await page.locator("[data-testid=sale-countdown]").count()) === 0, "countdown still shown");
   });
   await test("Responses are not cacheable", async () => {
     for (const u of ["/", "/api/quote"]) {
@@ -309,9 +322,67 @@ async function main() {
     const wrongPrice = await apiOrder(baseOrder({ packageId: "combo", expectedAmount: 9 }), { name: "c.pdf", buffer: PDF });
     expect(wrongPrice.status === 409 && wrongPrice.body.quote.finalPrice === 11, "combo charged at the wrong price");
     const bad = await apiOrder(baseOrder({ packageId: "humanize" }), { name: "c.pdf", buffer: PDF });
-    expect(bad.status === 422 && bad.body.errors.packageId, "unknown package accepted");
+    expect(bad.status === 422 && bad.body.errors.items, "unknown package accepted");
     const none = await apiOrder(baseOrder({ packageId: "" }), { name: "c.pdf", buffer: PDF });
-    expect(none.status === 422 && none.body.errors.packageId, "missing package accepted");
+    expect(none.status === 422 && none.body.errors.items, "missing package accepted");
+  });
+  await test("Several documents, each with its own check, are priced and stored per document", async () => {
+    const q = await (await fetch(`${BASE}/api/quote`)).json();
+    const price = (id: string) => q.quotes.find((x: any) => x.packageId === id).finalPrice;
+    const expected = price("similarity") * 2 + price("ai");
+    const items = [{ packageId: "similarity" }, { packageId: "ai" }, { packageId: "similarity" }];
+    const r = await apiOrder(baseOrder({ items, packageId: undefined, expectedAmount: expected }), [{ name: "bab1.pdf", buffer: PDF }, { name: "bab2.docx", buffer: await docx(20) }, { name: "bab3.pdf", buffer: PDF }]);
+    expect(r.status === 200 && r.body.amountDue === expected, JSON.stringify(r.body));
+    const [o] = await sql`select id, package_id, package_name_en, item_count, amount_due from orders where reference = ${r.body.reference}`;
+    expect(o.package_id === "mixed" && o.item_count === 3 && o.package_name_en === "2 × Plagiarism / Similarity Check + AI Check", JSON.stringify(o));
+    const rows = await sql`select position, package_id, price, filename, file_id from order_items where order_id = ${o.id} order by position`;
+    expect(rows.map((x) => `${x.position}:${x.package_id}:${x.filename}`).join(",") === "1:similarity:bab1.pdf,2:ai:bab2.docx,3:similarity:bab3.pdf", JSON.stringify(rows));
+    expect(rows.every((x) => x.file_id) && Number(rows[1].price) === price("ai"), "files or prices not linked");
+    orders.multi = { ref: r.body.reference, url: r.body.orderUrl };
+
+    const fewerFiles = await apiOrder(baseOrder({ items, packageId: undefined, expectedAmount: expected }), [{ name: "a.pdf", buffer: PDF }]);
+    expect(fewerFiles.status === 422 && fewerFiles.body.errors.file, "missing file accepted");
+    const six = Array.from({ length: 6 }, () => ({ packageId: "ai" }));
+    const tooMany = await apiOrder(baseOrder({ items: six, packageId: undefined, expectedAmount: price("ai") * 6 }), six.map((_, i) => ({ name: `${i}.pdf`, buffer: PDF })));
+    expect(tooMany.status === 422 && /at most 5/.test(tooMany.body.message), JSON.stringify(tooMany.body));
+    const big = Buffer.concat([PDF, Buffer.alloc(2.5 * 1024 * 1024)]);
+    const tooBig = await apiOrder(baseOrder({ items: [{ packageId: "ai" }, { packageId: "ai" }], packageId: undefined, expectedAmount: price("ai") * 2 }), [{ name: "a.pdf", buffer: big }, { name: "b.pdf", buffer: big }]);
+    expect(tooBig.status === 422 && /in total/.test(tooBig.body.message), JSON.stringify(tooBig.body));
+    const badOne = await apiOrder(baseOrder({ items: [{ packageId: "ai" }, { packageId: "ai" }], packageId: undefined, expectedAmount: price("ai") * 2 }), [{ name: "ok.pdf", buffer: PDF }, { name: "fake.pdf", buffer: Buffer.from("<html>") }]);
+    expect(badOne.status === 422 && badOne.body.message.startsWith("fake.pdf:"), "bad file not named");
+  });
+  await test("Customer adds documents with different checks and sees the total before paying", async () => {
+    const q = await (await fetch(`${BASE}/api/quote`)).json();
+    const price = (id: string) => q.quotes.find((x: any) => x.packageId === id).finalPrice;
+    await page.goto(`${BASE}/#order`);
+    await fillOrderForm(page, "plagiarism.docx", undefined, "similarity");
+    await page.click("[data-testid=add-document]");
+    await page.click("label:has([data-testid=doc-1-package-ai])");
+    await page.setInputFiles("[data-testid=doc-1-file]", { name: "ai-check.pdf", mimeType: "application/pdf", buffer: PDF });
+    const total = price("similarity") + price("ai");
+    expect((await page.textContent("[data-testid=live-total-amount]")) === `RM${total.toFixed(2)}`, "live total");
+    // Removing and re-adding keeps the form consistent
+    await page.click("[data-testid=add-document]");
+    await page.click("[data-testid=remove-doc-2]");
+    expect((await page.locator("[data-testid^=doc-][data-testid$=-file]").count()) === 2, "remove failed");
+    await page.click("[data-testid=review-order]");
+    await page.waitForSelector("[data-testid=order-review]");
+    const list = (await page.textContent("[data-testid=summary-items]")) ?? "";
+    expect(list.includes("plagiarism.docx") && list.includes("ai-check.pdf") && list.includes("Plagiarism / Similarity Check") && list.includes("AI Check"), list);
+    expect((await page.textContent("[data-testid=summary-total]")) === `RM${total.toFixed(2)}`, "review total");
+    await Promise.all([page.waitForURL(/\/order\//), page.click("[data-testid=confirm-order]")]);
+    expect((await page.locator("[data-testid=order-item]").count()) === 2, "order page items");
+    expect((await page.textContent("[data-testid=amount-due]")) === `RM${total.toFixed(2)}`, "order page amount");
+    await noOverflow(page);
+  });
+  await test("Customers can fetch only their own files with the private key", async () => {
+    const k = new URL(orders.multi.url, BASE).searchParams.get("k")!;
+    const [own] = await sql`select f.id from files f join orders o on o.id = f.order_id where o.reference = ${orders.multi.ref} limit 1`;
+    const [other] = await sql`select f.id from files f join orders o on o.id = f.order_id where o.reference <> ${orders.multi.ref} limit 1`;
+    const get = (id: string, key: string) => fetch(`${BASE}/api/orders/${orders.multi.ref}/files/${id}?k=${encodeURIComponent(key)}`);
+    expect((await get(own.id, k)).status === 200, "own file refused");
+    expect((await get(own.id, "wrong")).status === 404, "wrong key accepted");
+    expect((await get(other.id, k)).status === 404, "another order's file served");
   });
   await test("A package hidden by the owner cannot be ordered", async () => {
     await patchSettings((s) => (s.packages.find((p: any) => p.id === "combo").enabled = false));
@@ -321,11 +392,11 @@ async function main() {
     expect(r.status === 422, "hidden package accepted");
     await patchSettings((s) => (s.packages.find((p: any) => p.id === "combo").enabled = true));
   });
-  await test("The review step requires choosing a package", async () => {
+  await test("The review step requires choosing a check", async () => {
     await page.goto(`${BASE}/#order`);
     await page.fill("#customerName", "Nur Ujian");
     await page.click("[data-testid=review-order]");
-    expect(await page.isVisible("text=Please choose a package."), "no package error");
+    expect(await page.isVisible("text=Please choose a check for this document."), "no package error");
   });
   await test("Server rejects wrong types, fake files, disabled formats, oversize files and missing consent", async () => {
     const exe = await apiOrder(baseOrder(), { name: "a.exe", buffer: Buffer.from("MZ") });
@@ -357,11 +428,12 @@ async function main() {
     const loaded = await page.$eval("[data-testid=payment-qr]", (i) => (i as HTMLImageElement).naturalWidth);
     expect(loaded > 0, "QR not loaded");
     expect((await page.textContent("[data-testid=payment-section]"))?.includes("Scan the QR code"), "instructions");
-    const wa = decodeURIComponent((await page.getAttribute("[data-testid=order-whatsapp]", "href"))!);
-    expect(wa.startsWith("https://wa.me/60123456789?text="), wa);
-    for (const part of [`Order reference: ${orders.ui.ref}`, "Package: AI Check", "Amount: RM9.00", "Name: Nur Ujian", "WhatsApp: +60123456789", "Document: double.docx", "Status: Awaiting payment"]) {
-      expect(wa.includes(part), `WhatsApp message missing "${part}"`);
-    }
+    // Before the receipt: only a "questions" link, and a hint that the send button comes after the receipt.
+    const ask = decodeURIComponent((await page.getAttribute("[data-testid=order-whatsapp]", "href"))!);
+    expect(ask.startsWith("https://wa.me/60123456789?text=") && ask.includes(orders.ui.ref) && !ask.includes("/admin/"), ask);
+    expect(await page.isVisible("[data-testid=send-after-receipt]"), "no hint about the send step");
+    expect((await page.locator("[data-testid=send-section]").count()) === 0, "send step shown before payment");
+    const wa = ask;
     expect(!wa.includes("essay essay"), "document content leaked into WhatsApp");
   });
   await test("Uploading a receipt sets 'Pending verification' and never marks the order paid", async () => {
@@ -370,8 +442,39 @@ async function main() {
     await page.click("[data-testid=send-receipt]");
     await page.waitForSelector("[data-testid=pending-verification]");
     expect((await page.textContent("[data-testid=order-status]")) === "Payment under review", "status");
-    const [o] = await sql`select status, payment_verified_at from orders where reference = ${orders.ui.ref}`;
+    const [o] = await sql`select id, status, payment_verified_at from orders where reference = ${orders.ui.ref}`;
     expect(o.status === "payment_review" && o.payment_verified_at === null, JSON.stringify(o));
+    // Then the one-tap WhatsApp step: everything written for the owner, with private file links.
+    await page.waitForSelector("[data-testid=send-section]");
+    const wa = decodeURIComponent((await page.getAttribute("[data-testid=send-section] [data-testid=order-whatsapp]", "href"))!);
+    expect(wa.startsWith("https://wa.me/60123456789?text="), wa);
+    const [doc] = await sql`select id from files where order_id = ${o.id} and kind = 'document'`;
+    const [rec] = await sql`select id from files where order_id = ${o.id} and kind = 'receipt'`;
+    for (const part of ["Hi Bey Checker! I have placed an order and paid.", `Order: ${orders.ui.ref}`, "Name: Nur Ujian", "WhatsApp: +60123456789",
+      "1. AI Check (RM9.00): double.docx", "Total paid: RM9.00", "Payment receipt: receipt.png", `/admin/orders/${o.id}`, `Document 1: ${BASE}/api/admin/files/${doc.id}`, `Receipt: ${BASE}/api/admin/files/${rec.id}?inline=1`]) {
+      expect(wa.includes(part), `WhatsApp message missing "${part}"`);
+    }
+    expect(!wa.includes("essay essay"), "document content leaked into WhatsApp");
+  });
+  await test("On phones, the share button attaches the document and receipt for WhatsApp", async () => {
+    const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    // Stand-in for the phone's share sheet: records what would be shared.
+    // (A string, because tsx adds helpers to compiled functions that do not exist in the page.)
+    await c.addInitScript(`
+      Object.defineProperty(Navigator.prototype, "canShare", { configurable: true, value: (d) => Array.isArray(d && d.files) });
+      Object.defineProperty(Navigator.prototype, "share", { configurable: true, value: async (d) => {
+        window.__shared = { names: d.files.map((f) => f.name), sizes: d.files.map((f) => f.size), text: d.text };
+      } });
+    `);
+    const p = await c.newPage();
+    await p.goto(`${BASE}${orders.ui.url}`);
+    await p.click("[data-testid=share-files]");
+    await p.waitForFunction(() => (window as any).__shared);
+    const shared = await p.evaluate(() => (window as any).__shared);
+    expect(JSON.stringify(shared.names) === JSON.stringify(["double.docx", "receipt.png"]) && shared.sizes.every((n: number) => n > 0), JSON.stringify(shared));
+    expect(shared.text.includes(orders.ui.ref), "message not included");
+    await noOverflow(p);
+    await c.close();
   });
   await test("Invalid receipts and wrong keys are refused", async () => {
     const k = new URL(orders.ui.url, BASE).searchParams.get("k")!;
@@ -415,6 +518,21 @@ async function main() {
     await cust.reload();
     expect((await cust.textContent("[data-testid=order-status]")) === "Completed", "not completed");
     await cust.close();
+  });
+  await test("A file link from the WhatsApp message opens after signing in", async () => {
+    const [f] = await sql`select f.id, f.filename from files f join orders o on o.id = f.order_id where o.reference = ${orders.ui.ref} and f.kind = 'document'`;
+    const c = await browser.newContext({ acceptDownloads: true });
+    const p = await c.newPage();
+    await p.goto(`${BASE}/api/admin/files/${f.id}`);
+    expect(p.url().includes("/admin/login?next=%2Fapi%2Fadmin%2Ffiles%2F"), p.url());
+    await p.fill("#email", ADMIN_EMAIL);
+    await p.fill("#password", ADMIN_PASSWORD);
+    const [dl] = await Promise.all([p.waitForEvent("download"), p.click("button[type=submit]")]);
+    expect(dl.suggestedFilename() === f.filename, dl.suggestedFilename());
+    // The same works for the order link, and outside links are never followed
+    await p.goto(`${BASE}/admin/login?next=https://evil.example/`);
+    expect(new URL(p.url()).pathname === "/admin", p.url());
+    await c.close();
   });
   await test("Admin can reject a receipt; customer sees the reason and can resend", async () => {
     const r = await apiOrder(baseOrder(), { name: "r.pdf", buffer: PDF });

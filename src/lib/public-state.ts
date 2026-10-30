@@ -1,6 +1,6 @@
 import { getQrInfo, getSettings, checkoutBlockers } from "./settings";
-import { getQuotes, nextPriceChange, type Quote } from "./pricing";
-import { documentLimitMb } from "./files";
+import { getQuotes, MAX_DOCUMENTS, nextPriceChange, type Quote } from "./pricing";
+import { documentLimitMb, hostLimitMb } from "./files";
 import type { Settings } from "./config";
 
 export type PublicState = {
@@ -14,6 +14,9 @@ export type PublicState = {
   turnaroundMs: string;
   formats: string[];
   maxMb: number;
+  /** Limit for all documents of one order together. */
+  totalMb: number;
+  maxDocuments: number;
   paymentWindowHours: number;
   whatsapp: string;
   email: string;
@@ -35,6 +38,8 @@ export async function getPublicState(now: Date = new Date()): Promise<PublicStat
     turnaroundMs: settings.delivery.turnaroundMs,
     formats: settings.upload.formats,
     maxMb: documentLimitMb(settings.upload.maxMb),
+    totalMb: hostLimitMb(),
+    maxDocuments: MAX_DOCUMENTS,
     paymentWindowHours: settings.payment.windowHours,
     whatsapp: settings.contact.whatsapp,
     email: settings.contact.email,

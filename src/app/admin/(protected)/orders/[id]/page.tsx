@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { orderPath, type OrderRow } from "@/lib/orders";
+import { getOrderItems, orderPath, type OrderRow } from "@/lib/orders";
 import { ORDER_STATUSES, STATUS_LABELS } from "@/lib/config";
 import { rm } from "@/lib/pricing";
 import { formatMy } from "@/lib/time";
@@ -20,6 +20,8 @@ export default async function AdminOrder({ params, searchParams }: { params: Pro
   if (!o) notFound();
   const files = await sql<{ id: string; kind: string; filename: string; mime: string; size: number; created_at: Date }[]>`
     select id, kind, filename, mime, size, created_at from files where order_id = ${id} order by created_at`;
+  const items = await getOrderItems(id);
+  const itemByFile = new Map(items.filter((i) => i.file_id).map((i) => [i.file_id!, i]));
   const events = await sql<{ id: number; created_at: Date; actor: string; message: string }[]>`
     select id, created_at, actor, message from events where order_id = ${id} order by created_at desc, id desc`;
   const h = await headers();
@@ -41,7 +43,7 @@ export default async function AdminOrder({ params, searchParams }: { params: Pro
         <div className="space-y-6">
           <Section title="Customer">
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              <div><dt className="text-muted">Package</dt><dd className="font-semibold" data-testid="admin-package">{o.package_name_en}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted">Checks</dt><dd className="font-semibold" data-testid="admin-package">{o.package_name_en}</dd></div>
               <div><dt className="text-muted">Name</dt><dd>{o.customer_name}</dd></div>
               <div><dt className="text-muted">WhatsApp</dt><dd>+{o.whatsapp}</dd></div>
               <div><dt className="text-muted">Report delivery</dt><dd>{o.delivery_method === "email" ? `Email: ${o.email}` : "WhatsApp"}</dd></div>
@@ -61,7 +63,10 @@ export default async function AdminOrder({ params, searchParams }: { params: Pro
               <ul className="divide-y divide-line text-sm">
                 {files.map((f) => (
                   <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                    <span className="min-w-0 break-all"><span className="mr-2 rounded bg-secondary px-1.5 py-0.5 text-xs uppercase">{f.kind}</span>{f.filename} <span className="text-muted">({Math.round(f.size / 1024)} KB · {formatMy(f.created_at)})</span></span>
+                    <span className="min-w-0 break-all">
+                      <span className="mr-2 rounded bg-secondary px-1.5 py-0.5 text-xs uppercase">{f.kind === "document" && itemByFile.has(f.id) ? `Doc ${itemByFile.get(f.id)!.position}` : f.kind}</span>
+                      {itemByFile.has(f.id) && <strong className="mr-1.5" data-testid="admin-item-package">{itemByFile.get(f.id)!.package_name_en}:</strong>}
+                      {f.filename} <span className="text-muted">({Math.round(f.size / 1024)} KB · {formatMy(f.created_at)})</span></span>
                     <span className="flex gap-3">
                       {isImage(f.mime) && <a className="text-brand hover:underline" href={`/api/admin/files/${f.id}?inline=1`} target="_blank" rel="noopener">View</a>}
                       <a className="text-brand hover:underline" href={`/api/admin/files/${f.id}`} data-testid="admin-download">Download</a>

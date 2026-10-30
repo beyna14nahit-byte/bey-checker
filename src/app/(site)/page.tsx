@@ -11,6 +11,7 @@ import { Container, Notice } from "@/components/ui/card";
 import { Pricing, type PricingPlan } from "@/components/ui/pricing";
 import { Reveal } from "@/components/Reveal";
 import { OrderForm } from "@/components/OrderForm";
+import { AnimatedCountdown } from "@/components/ui/animated-countdown";
 import { TrustedByMarquee } from "@/components/ui/trusted-by-marquee";
 import { UNIVERSITIES } from "@/lib/universities";
 
@@ -117,6 +118,23 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-20">
         <Container className="py-12">
           <h2 id="pricing-title" className="sr-only">{t("Prices")}</h2>
+          {promo && (
+            <div className="mb-10 flex flex-col items-center text-center" data-testid="sale-countdown">
+              <p className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-dark">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand soft-pulse" aria-hidden="true" />
+                {promoLabel}
+              </p>
+              <p className="mt-3 text-xl font-bold sm:text-2xl">{t("Sale prices end in")}</p>
+              <AnimatedCountdown
+                className="mt-4"
+                targetDate={promo.endsAt}
+                serverTime={state.serverTime}
+                labels={{ days: t("Days"), hours: t("Hours"), minutes: t("Minutes"), seconds: t("Seconds") }}
+                ariaLabel={t("{promo} ends on {date}", { promo: promoLabel, date: formatMy(promo.endsAt, true, intlLocale(lang)) })}
+              />
+              <p className="mt-3 text-sm text-muted">{t("Ends {date} (Malaysia time). Normal prices apply after that.", { date: formatMy(promo.endsAt, true, intlLocale(lang)) })}</p>
+            </div>
+          )}
           <Pricing
             testId="price-card"
             title={t("Prices")}

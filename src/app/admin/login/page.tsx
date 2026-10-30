@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { currentAdmin } from "@/lib/auth";
+import { safeAdminNext } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin sign in", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  if (await currentAdmin()) redirect("/admin");
-  const { error } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
+  const { error, next: rawNext } = await searchParams;
+  const next = safeAdminNext(rawNext);
+  if (await currentAdmin()) redirect(next);
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <form method="post" action="/api/admin/login" className="w-full max-w-sm rounded-2xl border border-line bg-white p-6">
@@ -18,6 +20,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             {error}
           </p>
         )}
+        {next !== "/admin" && <input type="hidden" name="next" value={next} />}
         <label className="mt-5 block text-sm font-medium" htmlFor="email">Email</label>
         <input id="email" name="email" type="email" autoComplete="username" required className="input mt-1" />
         <label className="mt-4 block text-sm font-medium" htmlFor="password">Password</label>

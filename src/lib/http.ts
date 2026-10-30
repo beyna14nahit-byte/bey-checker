@@ -16,10 +16,14 @@ export function handleError(e: unknown, t: T = tEn) {
   return jsonError(t("Something went wrong on our side and your order was NOT saved. Please try again."), 500);
 }
 
-/** Reads a multipart body with a JSON "data" part and at most one "file" part. */
-export async function readForm(req: Request, maxMb: number, t: T): Promise<{ data: Record<string, unknown>; file: File | null }> {
+/**
+ * Reads a multipart body with a JSON "data" part and up to `maxFiles` "file" parts.
+ * `maxMb` limits the whole request (all files together).
+ */
+export async function readForm(req: Request, maxMb: number, t: T, maxFiles = 1): Promise<{ data: Record<string, unknown>; files: File[] }> {
+  const tooBig = maxFiles > 1 ? t("Your files are larger than {mb} MB in total.", { mb: maxMb }) : t("The file is larger than {mb} MB.", { mb: maxMb });
   const len = Number(req.headers.get("content-length") || 0);
-  if (len > (maxMb + 0.5) * 1024 * 1024) throw new UploadError(t("The file is larger than {mb} MB.", { mb: maxMb }));
+  if (len > (maxMb + 0.5) * 1024 * 1024) throw new UploadError(tooBig);
   let form: FormData;
   try {
     form = await req.formData();
@@ -34,6 +38,7 @@ export async function readForm(req: Request, maxMb: number, t: T): Promise<{ dat
     throw new ValidationError({ form: t("Please reload the page and try again.") });
   }
   const files = form.getAll("file").filter((f): f is File => typeof f !== "string");
-  if (files.length > 1) throw new UploadError(t("Please upload one file only."));
-  return { data, file: files[0] ?? null };
+  if (files.length > maxFiles) throw new UploadError(maxFiles === 1 ? t("Please upload one file only.") : t("Please send at most {n} documents per order.", { n: maxFiles }));
+  if (files.reduce((n, f) => n + f.size, 0) > maxMb * 1024 * 1024) throw new UploadError(tooBig);
+  return { data, files };
 }
