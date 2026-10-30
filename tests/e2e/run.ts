@@ -240,9 +240,20 @@ async function main() {
     }
     await page.click("[data-testid=price-card-card-similarity] >> text=Choose");
     await page.waitForURL(/package=similarity#order/);
+    await page.waitForFunction(() => (document.querySelector("[data-testid=doc-0-package-similarity]") as HTMLInputElement | null)?.checked, null, { timeout: 5000 }).catch(() => {});
     expect(await page.isChecked("[data-testid=doc-0-package-similarity]"), "package not preselected");
   });
 
+  await test("Choosing a price card after filling in the form keeps the details and files", async () => {
+    await page.goto(`${BASE}/#order`);
+    await fillOrderForm(page, "keep-me.docx");
+    await page.click("[data-testid=price-card-card-combo] >> text=Choose");
+    await page.waitForURL(/package=combo#order/);
+    await page.waitForFunction(() => (document.querySelector("[data-testid=doc-0-package-combo]") as HTMLInputElement | null)?.checked);
+    expect((await page.inputValue("#customerName")) === "Nur Ujian", "name lost");
+    expect((await page.textContent("[data-testid=doc-0]"))?.includes("keep-me.docx"), "file lost");
+    expect(await page.isChecked("#terms"), "consent lost");
+  });
   await test("Order review shows service, unit, normal price, discount and final amount", async () => {
     await page.goto(`${BASE}/#order`);
     await fillOrderForm(page);

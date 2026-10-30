@@ -2,7 +2,7 @@
 
 // Adapted from testimonial-section-2: rows of capsules drifting in opposite directions with edge fades
 // and a hatched band. Logos only (no quotes or modal). Pauses on hover/focus and is static for reduced motion.
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { motion, useAnimationFrame, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { cn } from "@/lib/utils";
 
@@ -30,12 +30,29 @@ function Tile({ item }: { item: MarqueeLogo }) {
 
 function Row({ items, reverse, seconds }: { items: MarqueeLogo[]; reverse: boolean; seconds: number }) {
   const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
   const x = useMotionValue(reverse ? -100 / COPIES : 0);
-  const paused = useRef(false);
+  const hovered = useRef(false);
+  const visible = useRef(true);
+  const speed = useRef(1); // eased towards 0 on hover so the row glides to a stop instead of jumping
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([e]) => (visible.current = e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   useAnimationFrame((_, delta) => {
-    if (paused.current || reduce) return;
+    if (reduce || !visible.current) return;
+    const dt = Math.min(delta, 100);
+    const target = hovered.current ? 0 : 1;
+    speed.current += (target - speed.current) * Math.min(1, dt / 180);
+    if (Math.abs(target - speed.current) < 0.001) speed.current = target;
+    if (speed.current === 0) return;
     const period = 100 / COPIES;
-    let v = x.get() + ((reverse ? 1 : -1) * period * Math.min(delta, 100)) / (seconds * 1000);
+    let v = x.get() + ((reverse ? 1 : -1) * period * dt * speed.current) / (seconds * 1000);
     if (v <= -period) v += period;
     if (v > 0) v -= period;
     x.set(v);
@@ -44,11 +61,12 @@ function Row({ items, reverse, seconds }: { items: MarqueeLogo[]; reverse: boole
   // Reduced motion is handled in CSS (motion-reduce:) so the server render already has the final layout.
   return (
     <motion.div
+      ref={ref}
       style={{ x: translate }}
       data-marquee-row
-      className="flex w-max items-center motion-reduce:mx-auto motion-reduce:w-full motion-reduce:max-w-6xl motion-reduce:flex-wrap motion-reduce:justify-center motion-reduce:gap-x-4 motion-reduce:gap-y-5 sm:motion-reduce:gap-x-5 motion-reduce:px-4 motion-reduce:transform-none!"
-      onPointerEnter={() => (paused.current = true)}
-      onPointerLeave={() => (paused.current = false)}
+      className="flex w-max items-center will-change-transform motion-reduce:mx-auto motion-reduce:w-full motion-reduce:max-w-6xl motion-reduce:flex-wrap motion-reduce:justify-center motion-reduce:gap-x-4 motion-reduce:gap-y-5 sm:motion-reduce:gap-x-5 motion-reduce:px-4 motion-reduce:transform-none!"
+      onPointerEnter={(e) => (hovered.current = e.pointerType === "mouse")}
+      onPointerLeave={() => (hovered.current = false)}
     >
       {Array.from({ length: COPIES }, (_, c) =>
         items.map((item) => (

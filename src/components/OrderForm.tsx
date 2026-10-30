@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, FileText, Loader2, Plus, X } from "lucide-react";
 import { intlLocale, translator, type Lang } from "@/lib/i18n";
 import type { PublicState } from "@/lib/public-state";
@@ -38,6 +38,21 @@ export function OrderForm({ initial, lang, initialPackage = null }: { initial: P
   // One key per checkout: a double click or retry returns the same order instead of a duplicate.
   const key = useRef(newKey());
   const nextDocKey = useRef(2);
+
+  // "Choose" on a price card updates the form in place, keeping everything already filled in.
+  const appliedPackage = useRef(initialPackage);
+  useEffect(() => {
+    if (!initialPackage || initialPackage === appliedPackage.current) return;
+    appliedPackage.current = initialPackage;
+    setStep("form");
+    setDocs((cur) => {
+      const empty = cur.findIndex((d) => !d.packageId);
+      if (empty >= 0) return cur.map((d, i) => (i === empty ? { ...d, packageId: initialPackage } : d));
+      if (cur.length === 1) return [{ ...cur[0], packageId: initialPackage }];
+      if (cur.length < state.maxDocuments) return [...cur, { key: nextDocKey.current++, packageId: initialPackage, file: null }];
+      return cur;
+    });
+  }, [initialPackage, state.maxDocuments]);
 
   const set = (k: keyof Values) => (v: string) => setValues((cur) => ({ ...cur, [k]: v }));
   const setDoc = (i: number, patch: Partial<Doc>) => setDocs((cur) => cur.map((d, j) => (j === i ? { ...d, ...patch } : d)));

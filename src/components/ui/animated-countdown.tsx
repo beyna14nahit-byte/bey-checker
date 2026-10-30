@@ -39,7 +39,7 @@ export type AnimatedCountdownProps = {
 const UNIT_LABELS: Record<CountdownUnitKey, string> = { days: "Days", hours: "Hours", minutes: "Minutes", seconds: "Seconds" };
 
 const variantClasses: Record<CountdownVariant, string> = {
-  modern: "border-border/70 bg-white/80 shadow-2xl shadow-primary/5 backdrop-blur-xl",
+  modern: "border-border/70 bg-white/95 shadow-2xl shadow-primary/5",
   digital: "border-cyan-400/20 bg-zinc-950 text-white shadow-2xl shadow-cyan-500/10",
   minimal: "border-transparent bg-transparent shadow-none",
   classic: "border-border bg-card shadow-sm",

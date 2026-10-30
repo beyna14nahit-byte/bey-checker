@@ -22,7 +22,7 @@ function FlowGraphic({ t }: { t: T }) {
     { icon: FileCheck2, label: t("Your report") },
   ];
   return (
-    <div className="relative rounded-2xl border border-line bg-white/90 p-6 backdrop-blur-sm sm:p-8" aria-hidden="true">
+    <div className="relative rounded-2xl border border-line bg-white p-6 sm:p-8" aria-hidden="true">
       <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_70%_20%,rgba(3,105,161,0.08),transparent_60%)]" />
       <div className="relative flex items-center justify-between gap-2">
         {steps.map(({ icon: Icon, label }, i) => (
@@ -34,9 +34,9 @@ function FlowGraphic({ t }: { t: T }) {
               <span className="text-xs font-medium text-ink-soft sm:text-sm">{label}</span>
             </div>
             {i < steps.length - 1 && (
-              <svg className="mb-6 h-2 w-0 min-w-0 flex-1" viewBox="0 0 100 4" preserveAspectRatio="none">
-                <line x1="0" y1="2" x2="100" y2="2" stroke="currentColor" strokeWidth="2" className="flow-line text-brand/50" vectorEffect="non-scaling-stroke" />
-              </svg>
+              <span className="relative mb-6 h-0.5 w-0 min-w-0 flex-1 overflow-hidden text-brand/50">
+                <span className="flow-dash absolute inset-y-0 -left-6 right-0" />
+              </span>
             )}
           </div>
         ))}
@@ -85,7 +85,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <section className="border-b border-line/70 bg-white/70 backdrop-blur-[2px]">
+      <section className="border-b border-line/70 bg-white/80">
         <Container className="grid items-center gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
           <div>
             <p className="rise text-sm font-semibold uppercase tracking-wide text-brand">{t("AI and plagiarism check reports")}</p>
@@ -113,7 +113,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           note={t("Logos belong to their respective universities. We are an independent service and are not affiliated with or endorsed by any university.")}
           items={UNIVERSITIES_WITH_LOGOS}
           accent="var(--color-brand)"
-          className="border-b border-line/70 bg-white/80 backdrop-blur-[2px]"
+          className="border-b border-line/70 bg-white/85"
         />
       )}
 
@@ -157,7 +157,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </Container>
       </section>
 
-      <section id="how" aria-labelledby="how-title" className="border-y border-line/70 bg-white/70 backdrop-blur-[2px]">
+      <section id="how" aria-labelledby="how-title" className="border-y border-line/70 bg-white/80">
         <Container className="py-12">
           <h2 id="how-title" className="text-2xl font-bold">{t("How it works")}</h2>
           <ol className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -188,7 +188,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <h2 id="order-title" className="text-2xl font-bold">{t("Place your order")}</h2>
           {state.checkoutOpen ? (
             <div className="mt-6">
-              <OrderForm key={initialPackage ?? "none"} initial={toClientState(state)} lang={lang} initialPackage={initialPackage} />
+              <OrderForm initial={toClientState(state)} lang={lang} initialPackage={initialPackage} />
             </div>
           ) : (
             <Notice tone="warn" className="mt-6" data-testid="checkout-closed">
@@ -199,7 +199,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       </section>
 
       {testimonials.length > 0 && (
-        <section aria-labelledby="feedback-title" className="border-t border-line/70 bg-white/70 backdrop-blur-[2px]">
+        <section aria-labelledby="feedback-title" className="border-t border-line/70 bg-white/80">
           <Container className="py-12">
             <h2 id="feedback-title" className="text-2xl font-bold">{t("What customers said")}</h2>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">

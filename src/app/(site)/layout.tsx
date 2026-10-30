@@ -38,7 +38,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         </Container>
       </header>
       <main id="main">{children}</main>
-      <footer className="mt-16 border-t border-line bg-white/90 backdrop-blur-[2px]">
+      <footer className="mt-16 border-t border-line bg-white/95">
         <Container className="flex flex-col gap-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
           <p>&copy; {new Date().getFullYear()} Bey Checker · {t("Manual AI detection report service, Malaysia.")}</p>
           <nav aria-label={t("Footer")} className="flex flex-wrap gap-x-5 gap-y-2">
